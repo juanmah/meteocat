@@ -1,0 +1,7 @@
+line-length = 120
+
+lint.select = ["E4", "E5", "E7", "E9", "F", "I", "B", "N", "D2", "D3", "D4", "UP"]
+lint.ignore = ["D211", "D212"]
+
+[format]
+quote-style = "single"
