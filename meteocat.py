@@ -30,7 +30,7 @@ app = typer.Typer(help='Set the desktop wallpaper by fetching radar images from 
 @app.command()
 def check_dependencies():
     """Check for required system packages dependencies and give information if any are missing."""
-    dependencies = {'montage': 'imagemagick', 'convert': 'imagemagick', 'inkscape': 'inkscape', 'gsettings': 'glib2'}
+    dependencies = {'montage': 'imagemagick', 'magick': 'imagemagick', 'inkscape': 'inkscape', 'gsettings': 'glib2'}
     missing_dependency = False
     for command, package in dependencies.items():
         if which(command) is None:
@@ -58,7 +58,7 @@ def generate_background():
         # Join background
         subprocess.call(f'montage -tile 18x -geometry +0+0 {tiles} {BACKGROUND_RAW}', shell=True)
         # Crop to 4K
-        subprocess.call(f'convert -crop 3840x2160+300+300 {BACKGROUND_RAW} {BACKGROUND_4K}', shell=True)
+        subprocess.call(f'magick {BACKGROUND_RAW} -crop 3840x2160+300+300 {BACKGROUND_4K}', shell=True)
 
 
 @app.command()
