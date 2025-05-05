@@ -20,9 +20,12 @@ from tqdm import tqdm
 
 BACKGROUND_RAW = 'background/background_raw.png'
 BACKGROUND_4K = 'background/background_4K.png'
+BACKGROUND_4K_DARK = 'background/background_4K_dark.png'
 RADAR = 'output/radar.png'
 COMPOSITE = 'wallpaper.svg'
+COMPOSITE_DARK = 'wallpaper_dark.svg'
 WALLPAPER = 'output/wallpaper.png'
+WALLPAPER_DARK = 'output/wallpaper_dark.png'
 
 app = typer.Typer(help='Set the desktop wallpaper by fetching radar images from meteo.cat.')
 
@@ -59,6 +62,8 @@ def generate_background():
         subprocess.call(f'montage -tile 18x -geometry +0+0 {tiles} {BACKGROUND_RAW}', shell=True)
         # Crop to 4K
         subprocess.call(f'magick {BACKGROUND_RAW} -crop 3840x2160+300+300 {BACKGROUND_4K}', shell=True)
+        # Crop to 4K dark
+        subprocess.call(f'magick {BACKGROUND_4K} -negate {BACKGROUND_4K_DARK}', shell=True)
 
 
 @app.command()
@@ -85,9 +90,14 @@ def generate_wallpaper():
         subprocess.call(f'montage -tile 3x -geometry +0+0 -background none {tiles} {RADAR}', shell=True)
     # Generate wallpaper with background and radar
     subprocess.call(f'inkscape --export-type="png" {COMPOSITE} --export-filename={WALLPAPER}', shell=True)
+    subprocess.call(f'inkscape --export-type="png" {COMPOSITE_DARK} --export-filename={WALLPAPER_DARK}', shell=True)
     # Set wallpaper as the desktop background
     wallpaper = os.path.abspath(WALLPAPER)
     subprocess.call(f'dbus-launch gsettings set org.gnome.desktop.background picture-uri {wallpaper}', shell=True)
+    wallpaper_dark = os.path.abspath(WALLPAPER_DARK)
+    subprocess.call(
+        f'dbus-launch gsettings set org.gnome.desktop.background picture-uri-dark {wallpaper_dark}', shell=True
+    )
     print('Updated meteo.cat radar background.')
 
 
