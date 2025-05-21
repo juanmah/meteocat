@@ -11,20 +11,34 @@ This script generates a wallpaper by fetching radar images and combining them wi
 
 ## Requirements
 
-- Python 3.12
+- Python 3.13 or higher
 - ImageMagick
 - Inkscape
 - GNOME: gsettings
 
 ## Installation
 
-To install required packages, use:
+The project uses `uv` for dependency management. To set up the environment and install dependencies:
 
 ```console
-> pipenv install
+> uv sync
 ```
+This command will automatically create a virtual environment in the `.venv` directory if one doesn't exist, and then install the dependencies specified in `uv.lock` to ensure reproducible builds.
 
-Python virtualenv management tool [pipenv](https://pipenv.pypa.io/en/latest/) is required.
+If you prefer to install directly from `pyproject.toml` (which might resolve to newer versions than those specified in `uv.lock`), you can use:
+```console
+> uv pip install .
+```
+After running `uv sync` or `uv pip install .`, you can activate the virtual environment to run commands directly:
+*   On macOS and Linux:
+    ```console
+    > source .venv/bin/activate
+    ```
+*   On Windows:
+    ```console
+    > .venv\Scripts\activate
+    ```
+Alternatively, you can prefix your commands with `uv run`, e.g., `uv run ./meteocat.py`.
 
 ## Usage
 
@@ -53,7 +67,7 @@ To schedule this script to run every 6 minutes using systemd timer, you can foll
     [Service]
     Type=oneshot
     WorkingDirectory=/<<path>>/meteocat
-    ExecStart=/usr/bin/pipenv run ./meteocat.py
+    ExecStart=/<<path>>/meteocat/.venv/bin/python ./meteocat.py
     ```
 
     - The `WorkingDirectory` directive specifies the absolute path to the directory where the script is located.
