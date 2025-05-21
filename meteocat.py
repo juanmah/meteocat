@@ -12,10 +12,11 @@ import subprocess
 import tempfile
 from datetime import UTC, datetime, timedelta
 from shutil import which
+import logging
 
 import requests
 import typer
-from rich import print
+from rich.logging import RichHandler
 from tqdm import tqdm
 
 BACKGROUND_RAW = 'background/background_raw.png'
@@ -27,6 +28,12 @@ COMPOSITE_DARK = 'wallpaper_dark.svg'
 WALLPAPER = 'output/wallpaper.png'
 WALLPAPER_DARK = 'output/wallpaper_dark.png'
 
+logger = logging.getLogger("meteocat")
+logger.setLevel(logging.INFO)
+rich_handler = RichHandler(rich_tracebacks=True)
+rich_handler.setFormatter(logging.Formatter("%(message)s", datefmt="[%X]"))
+logger.addHandler(rich_handler)
+
 app = typer.Typer(help='Set the desktop wallpaper by fetching radar images from meteo.cat.')
 
 
@@ -37,13 +44,13 @@ def check_dependencies():
     missing_dependency = False
     for command, package in dependencies.items():
         if which(command) is None:
-            print(
-                f'> [red]ERROR[/red]: [black][bold]{command}[/bold] command not found. '
+            logger.error(
+                f'[red]ERROR[/red]: [black][bold]{command}[/bold] command not found. '
                 f'Please install [bold]{package}[/bold][/black].'
             )
             missing_dependency = True
     if missing_dependency:
-        print('> [red]Exiting[/red].')
+        logger.error('[red]Exiting[/red].')
         raise SystemExit
 
 
@@ -72,8 +79,8 @@ def generate_wallpaper():
     """Generate a wallpaper with an updated meteo.cat radar map."""
     check_dependencies()
     if not os.path.isfile('background/background_4K.png'):
-        print("> Background doesn't exist.")
-        print('> Generating a background map of Catalonia from meteo.cat sources.')
+        logger.info("> Background doesn't exist.")
+        logger.info('> Generating a background map of Catalonia from meteo.cat sources.')
         generate_background()
     # Get current radar map
     with tempfile.TemporaryDirectory() as temp_dir:
@@ -98,7 +105,7 @@ def generate_wallpaper():
     subprocess.call(
         f'dbus-launch gsettings set org.gnome.desktop.background picture-uri-dark {wallpaper_dark}', shell=True
     )
-    print('Updated meteo.cat radar background.')
+    logger.info('Updated meteo.cat radar background.')
 
 
 if __name__ == '__main__':
