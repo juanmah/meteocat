@@ -24,9 +24,28 @@ class WallpaperSettings(BaseModel):
     radar_offset_x: int = 63
     radar_offset_y: int = 80
 
+    tile_size: int = 256
+    background_columns: int = 18
+    radar_columns: int = 3
+    max_workers: int = 10
+    radar_delay_minutes: int = 12
+
     request_timeout: int = 30
     max_retries: int = 5
     retry_backoff_base: int = 4
+
+    crop_left: int = 300
+    crop_top: int = 300
+    crop_width: int = 3840
+    crop_height: int = 2160
+    rectangle_coords: tuple[int, int, int, int] = (2266, 2029, 2341, 2079)
+    floodfill_pos: tuple[int, int] = (3839, 2159)
+    floodfill_thresh: int = 140
+    resize_factor: float = 1.895
+    paste_offset_x: int = -2402
+    paste_offset_y: int = -299
+    opacity_radar: float = 0.8
+    opacity_radar_dark: float = 0.3
 
 
 settings = WallpaperSettings()
