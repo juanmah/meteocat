@@ -20,6 +20,7 @@ from shutil import which
 
 import requests
 import typer
+from PIL import Image, ImageDraw, ImageOps
 from rich.logging import RichHandler
 from tqdm import tqdm
 
@@ -47,28 +48,41 @@ def _download_tile(url: str, dest: Path) -> None:
         response.raise_for_status()
 
 
-@app.command()
-def check_dependencies():
-    """Check for required system packages dependencies and give information if any are missing."""
-    dependencies = {'montage': 'imagemagick', 'magick': 'imagemagick', 'inkscape': 'inkscape', 'gsettings': 'glib2'}
-    missing_dependency = False
-    for command, package in dependencies.items():
+def _assemble_tiles(tiles: list[Path], columns: int) -> Image.Image:
+    images = [Image.open(t) for t in tiles]
+    rows = (len(images) + columns - 1) // columns
+    width = columns * 256
+    height = rows * 256
+    canvas = Image.new('RGBA', (width, height), (0, 0, 0, 0))
+    for i, img in enumerate(images):
+        col = i % columns
+        row = i // columns
+        canvas.paste(img, (col * 256, row * 256))
+    return canvas
+
+
+def _check_dependencies() -> None:
+    for command, package in {'inkscape': 'inkscape', 'gsettings': 'glib2'}.items():
         if which(command) is None:
             logger.error(
                 f'[red]ERROR[/red]: [black][bold]{command}[/bold] command not found. '
-                f'Please install [bold]{package}[/bold][/black].'
+                f'Please install [bold]{package}[/bold].'
             )
-            missing_dependency = True
-    if missing_dependency:
-        logger.error('[red]Exiting[/red].')
-        raise SystemExit
+            logger.error('[red]Exiting[/red].')
+            raise SystemExit
+
+
+@app.command()
+def check_dependencies():
+    """Check for required system packages dependencies and give information if any are missing."""
+    _check_dependencies()
 
 
 @app.command()
 def generate_background():
     """Generate the background map of Catalonia from meteo.cat sources, and adapt it to 4K."""
 
-    def _download_background_tile(args):
+    def _download_background_tile(args: tuple[int, int, str]) -> None:
         x, y, temp_dir = args
         url = f'https://static-m.meteo.cat/tiles/fons/GoogleMapsCompatible/10/000/000/{x}/000/000/{y}.png'
         dest = (
@@ -83,55 +97,37 @@ def generate_background():
         with ThreadPoolExecutor(max_workers=10) as executor:
             list(tqdm(executor.map(_download_background_tile, tasks), total=len(tasks)))
         tiles = sorted(glob.glob(f'{temp_dir}/background-*.png'))
-        subprocess.run(
-            ['montage', '-tile', '18x', '-geometry', '+0+0', *tiles, settings.background_raw],
-            check=True,
-        )
-        subprocess.run(
-            [
-                'magick',
-                settings.background_raw,
-                '-crop',
-                '3840x2160+300+300',
-                '-fill',
-                '#9c9c9c',
-                '-draw',
-                'rectangle 2266,2029 2340,2078',
-                settings.background_4k,
-            ],
-            check=True,
-        )
-        subprocess.run(
-            ['magick', settings.background_4k, '-alpha', 'off', '-negate', settings.background_4k_dark],
-            check=True,
-        )
-        subprocess.run(
-            [
-                'magick',
-                settings.background_4k_dark,
-                '-fill',
-                '#292929',
-                '-fuzz',
-                '9000',
-                '-draw',
-                'color 3839,2159 floodfill',
-                settings.background_4k_dark,
-            ],
-            check=True,
-        )
+        expected = len(settings.background_tile_range_x) * len(settings.background_tile_range_y)
+        if len(tiles) != expected:
+            logger.error(f'Expected {expected} background tiles, got {len(tiles)}')
+            raise SystemExit(1)
+        tile_paths = [Path(t) for t in tiles]
+        canvas = _assemble_tiles(tile_paths, columns=18)
+        canvas.save(settings.background_raw)
+        img = Image.open(settings.background_raw)
+        img = img.crop((300, 300, 300 + 3840, 300 + 2160))
+        draw = ImageDraw.Draw(img)
+        draw.rectangle([2266, 2029, 2341, 2079], fill='#9c9c9c')
+        img.save(settings.background_4k)
+        white = Image.new('RGB', img.size, (255, 255, 255))
+        white.paste(img.convert('RGBA'), mask=img.split()[3])
+        img_dark = ImageOps.invert(white)
+        img_dark.save(settings.background_4k_dark)
+        ImageDraw.floodfill(img_dark, (3839, 2159), (41, 41, 41), thresh=140)
+        img_dark.save(settings.background_4k_dark)
 
 
 @app.command()
 @app.callback(invoke_without_command=True)
 def generate_wallpaper():
     """Generate a wallpaper with an updated meteo.cat radar map."""
-    check_dependencies()
+    _check_dependencies()
     if not os.path.isfile('background/background_4K.png'):
         logger.info("> Background doesn't exist.")
         logger.info('> Generating a background map of Catalonia from meteo.cat sources.')
         generate_background()
 
-    def _download_radar_tile(args):
+    def _download_radar_tile(args: tuple[int, int, str, datetime]) -> None:
         x, y, temp_dir, now = args
         date = f'{now.year}/{now.month:02}/{now.day:02}/{now.hour:02}/{now.minute // 6 * 6:02}'
         url = f'https://static-m.meteo.cat/tiles/radar/{date}/07/000/000/0{x}/000/000/0{y}.png'
@@ -144,10 +140,13 @@ def generate_wallpaper():
         with ThreadPoolExecutor(max_workers=10) as executor:
             list(tqdm(executor.map(_download_radar_tile, tasks), total=len(tasks)))
         tiles = sorted(glob.glob(f'{temp_dir}/radar-*.png'))
-        subprocess.run(
-            ['montage', '-tile', '3x', '-geometry', '+0+0', '-background', 'none', *tiles, settings.radar],
-            check=True,
-        )
+        expected = len(settings.radar_tile_range_x) * len(settings.radar_tile_range_y)
+        if len(tiles) != expected:
+            logger.error(f'Expected {expected} radar tiles, got {len(tiles)}')
+            raise SystemExit(1)
+        tile_paths = [Path(t) for t in tiles]
+        canvas = _assemble_tiles(tile_paths, columns=3)
+        canvas.save(settings.radar)
     subprocess.run(
         ['inkscape', '--export-type=png', settings.composite, '--export-filename', settings.wallpaper],
         check=True,
@@ -156,17 +155,22 @@ def generate_wallpaper():
         ['inkscape', '--export-type=png', settings.composite_dark, '--export-filename', settings.wallpaper_dark],
         check=True,
     )
-    wallpaper = os.path.abspath(settings.wallpaper)
-    subprocess.run(
-        ['dbus-launch', 'gsettings', 'set', 'org.gnome.desktop.background', 'picture-uri', wallpaper],
-        check=True,
-    )
-    wallpaper_dark = os.path.abspath(settings.wallpaper_dark)
-    subprocess.run(
-        ['dbus-launch', 'gsettings', 'set', 'org.gnome.desktop.background', 'picture-uri-dark', wallpaper_dark],
-        check=True,
-    )
+    wallpaper = Path(os.path.abspath(settings.wallpaper))
+    _set_wallpaper(wallpaper)
+    wallpaper_dark = Path(os.path.abspath(settings.wallpaper_dark))
+    _set_wallpaper(wallpaper_dark, dark=True)
     logger.info('Updated meteo.cat radar background.')
+
+
+def _set_wallpaper(path: Path, dark: bool = False) -> None:
+    import gi
+
+    gi.require_version('Gio', '2.0')
+    from gi.repository import Gio
+
+    key = 'picture-uri-dark' if dark else 'picture-uri'
+    gsettings = Gio.Settings.new('org.gnome.desktop.background')
+    gsettings.set_string(key, f'file://{path}')
 
 
 if __name__ == '__main__':
