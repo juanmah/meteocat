@@ -1,7 +1,7 @@
 [project]
 name = "meteocat-wallpaper"
 version = "0.1.0"
-requires-python = ">=3.13"
+requires-python = ">=3.14"
 dependencies = [
     "requests",
     "typer",
@@ -88,7 +88,6 @@ select = [
     "TRY",
 ]
 ignore = [
-    "D203",
     "incorrect-blank-line-before-class",
     "blank-line-before-class",
     "multi-line-summary-first-line",
@@ -96,12 +95,13 @@ ignore = [
     "avoidable-escaped-quote",
     "missing-trailing-comma",
     "typing-only-standard-library-import",
-    "ERA001",
+    "commented-out-code",
+    "logging-f-string",
 ]
 
 [tool.ruff.lint.per-file-ignores]
 "*.ipynb" = ["print", "suspicious-non-cryptographic-random-usage"]
-"**/tests/*" = ["ERA001"]
+"**/tests/*" = ["commented-out-code"]
 
 [tool.ruff.format]
 quote-style = "single"

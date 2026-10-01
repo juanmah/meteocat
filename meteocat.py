@@ -7,10 +7,9 @@ This script automates the creation of a desktop background combining radar maps 
 also sourced from meteo.cat.
 """
 
-import glob
 import logging
-import os
 import random
+import sys
 import tempfile
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -28,9 +27,14 @@ from src.config import settings
 
 logger = logging.getLogger('meteocat')
 logger.setLevel(logging.INFO)
-rich_handler = RichHandler(rich_tracebacks=True)
-rich_handler.setFormatter(logging.Formatter('%(message)s', datefmt='[%X]'))
-logger.addHandler(rich_handler)
+if sys.stderr.isatty():
+    rich_handler = RichHandler(rich_tracebacks=True)
+    rich_handler.setFormatter(logging.Formatter('%(message)s', datefmt='[%X]'))
+    logger.addHandler(rich_handler)
+else:
+    handler = logging.StreamHandler()
+    handler.setFormatter(logging.Formatter('%(message)s'))
+    logger.addHandler(handler)
 
 app = typer.Typer(help='Set the desktop wallpaper by fetching radar images from meteo.cat.')
 
@@ -40,7 +44,7 @@ def _download_tile(url: str, dest: Path) -> None:
         try:
             response = requests.get(url, timeout=settings.request_timeout)
         except requests.RequestException as exc:
-            logger.warning(f'Download failed ({exc}), retrying...')
+            logger.warning('Download failed (%s), retrying...', exc)
         else:
             if response.status_code == 200:
                 dest.write_bytes(response.content)
@@ -50,7 +54,7 @@ def _download_tile(url: str, dest: Path) -> None:
                 f'attempt {attempt + 1}/{settings.max_retries}, retrying...'
             )
         cap = settings.retry_backoff_base ** (attempt + 1)
-        time.sleep(random.uniform(0, cap))  # nosec B311
+        time.sleep(random.uniform(0, cap))  # ruff: ignore[suspicious-non-cryptographic-random-usage]  # nosec B311
     else:
         response.raise_for_status()
 
@@ -104,7 +108,7 @@ def generate_background() -> None:
         tasks = [(x, y, temp_dir) for x in settings.background_tile_range_x for y in settings.background_tile_range_y]
         with ThreadPoolExecutor(max_workers=10) as executor:
             list(tqdm(executor.map(_download_background_tile, tasks), total=len(tasks)))
-        tiles = sorted(glob.glob(f'{temp_dir}/background-*.png'))
+        tiles = sorted(str(p) for p in Path(temp_dir).glob('background-*.png'))
         expected = len(settings.background_tile_range_x) * len(settings.background_tile_range_y)
         if len(tiles) != expected:
             logger.error(f'Expected {expected} background tiles, got {len(tiles)}')
@@ -136,7 +140,7 @@ def _composite_radar(background_path: Path, radar_path: Path, output_path: Path,
     background.convert('RGB').save(output_path)
 
 
-def _set_wallpaper(path: Path, dark: bool = False) -> None:
+def _set_wallpaper(path: Path, *, dark: bool = False) -> None:
     import gi
 
     gi.require_version('Gio', '2.0')
@@ -151,14 +155,14 @@ def _set_wallpaper(path: Path, dark: bool = False) -> None:
 def main(ctx: typer.Context) -> None:
     if ctx.invoked_subcommand is None:
         typer.echo(ctx.get_help())
-        raise typer.Exit()
+        raise typer.Exit
 
 
 @app.command()
 def generate_wallpaper() -> None:
     """Generate a wallpaper with an updated meteo.cat radar map."""
     _check_dependencies()
-    if not os.path.isfile('background/background_4K.png'):
+    if not Path('background/background_4K.png').is_file():
         logger.info("> Background doesn't exist.")
         logger.info('> Generating a background map of Catalonia from meteo.cat sources.')
         generate_background()
@@ -175,7 +179,7 @@ def generate_wallpaper() -> None:
         tasks = [(x, y, temp_dir, now) for x in settings.radar_tile_range_x for y in settings.radar_tile_range_y]
         with ThreadPoolExecutor(max_workers=10) as executor:
             list(tqdm(executor.map(_download_radar_tile, tasks), total=len(tasks)))
-        tiles = sorted(glob.glob(f'{temp_dir}/radar-*.png'))
+        tiles = sorted(str(p) for p in Path(temp_dir).glob('radar-*.png'))
         expected = len(settings.radar_tile_range_x) * len(settings.radar_tile_range_y)
         if len(tiles) != expected:
             logger.error(f'Expected {expected} radar tiles, got {len(tiles)}')
@@ -185,9 +189,9 @@ def generate_wallpaper() -> None:
         canvas.save(settings.radar)
     _composite_radar(settings.background_4k, settings.radar, settings.wallpaper, 0.8)
     _composite_radar(settings.background_4k_dark, settings.radar, settings.wallpaper_dark, 0.3)
-    wallpaper = Path(os.path.abspath(settings.wallpaper))
+    wallpaper = Path(Path(settings.wallpaper).resolve())
     _set_wallpaper(wallpaper)
-    wallpaper_dark = Path(os.path.abspath(settings.wallpaper_dark))
+    wallpaper_dark = Path(Path(settings.wallpaper_dark).resolve())
     _set_wallpaper(wallpaper_dark, dark=True)
     logger.info('Updated meteo.cat radar background.')
 
