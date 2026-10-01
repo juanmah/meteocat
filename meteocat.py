@@ -40,12 +40,14 @@ app = typer.Typer(help='Set the desktop wallpaper by fetching radar images from 
 
 
 def _download_tile(url: str, dest: Path) -> None:
+    last_response: requests.Response | None = None
     for attempt in range(settings.max_retries):
         try:
             response = requests.get(url, timeout=settings.request_timeout)
         except requests.RequestException as exc:
             logger.warning('Download failed (%s), retrying...', exc)
         else:
+            last_response = response
             if response.status_code == 200:
                 dest.write_bytes(response.content)
                 return
@@ -56,7 +58,10 @@ def _download_tile(url: str, dest: Path) -> None:
         cap = settings.retry_backoff_base ** (attempt + 1)
         time.sleep(random.uniform(0, cap))  # ruff: ignore[suspicious-non-cryptographic-random-usage]  # nosec B311
     else:
-        response.raise_for_status()
+        if last_response is not None:
+            last_response.raise_for_status()
+        msg = f'Failed to download {url} after {settings.max_retries} attempts'
+        raise RuntimeError(msg)
 
 
 def _assemble_tiles(tiles: list[Path], columns: int) -> Image.Image:
