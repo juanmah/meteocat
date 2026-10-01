@@ -10,7 +10,7 @@ also sourced from meteo.cat.
 import glob
 import logging
 import os
-import subprocess
+import subprocess  # nosec B404
 import tempfile
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -117,6 +117,17 @@ def generate_background():
         img_dark.save(settings.background_4k_dark)
 
 
+def _set_wallpaper(path: Path, dark: bool = False) -> None:
+    import gi
+
+    gi.require_version('Gio', '2.0')
+    from gi.repository import Gio
+
+    key = 'picture-uri-dark' if dark else 'picture-uri'
+    gsettings = Gio.Settings.new('org.gnome.desktop.background')
+    gsettings.set_string(key, f'file://{path}')
+
+
 @app.command()
 @app.callback(invoke_without_command=True)
 def generate_wallpaper():
@@ -147,12 +158,13 @@ def generate_wallpaper():
         tile_paths = [Path(t) for t in tiles]
         canvas = _assemble_tiles(tile_paths, columns=3)
         canvas.save(settings.radar)
-    subprocess.run(
-        ['inkscape', '--export-type=png', settings.composite, '--export-filename', settings.wallpaper],
+    inkscape = which('inkscape')
+    subprocess.run(  # nosec B603
+        [inkscape, '--export-type=png', settings.composite, '--export-filename', settings.wallpaper],
         check=True,
     )
-    subprocess.run(
-        ['inkscape', '--export-type=png', settings.composite_dark, '--export-filename', settings.wallpaper_dark],
+    subprocess.run(  # nosec B603
+        [inkscape, '--export-type=png', settings.composite_dark, '--export-filename', settings.wallpaper_dark],
         check=True,
     )
     wallpaper = Path(os.path.abspath(settings.wallpaper))
@@ -160,17 +172,6 @@ def generate_wallpaper():
     wallpaper_dark = Path(os.path.abspath(settings.wallpaper_dark))
     _set_wallpaper(wallpaper_dark, dark=True)
     logger.info('Updated meteo.cat radar background.')
-
-
-def _set_wallpaper(path: Path, dark: bool = False) -> None:
-    import gi
-
-    gi.require_version('Gio', '2.0')
-    from gi.repository import Gio
-
-    key = 'picture-uri-dark' if dark else 'picture-uri'
-    gsettings = Gio.Settings.new('org.gnome.desktop.background')
-    gsettings.set_string(key, f'file://{path}')
 
 
 if __name__ == '__main__':
