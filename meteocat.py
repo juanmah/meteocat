@@ -10,6 +10,7 @@ also sourced from meteo.cat.
 import glob
 import logging
 import os
+import random
 import subprocess  # nosec B404
 import tempfile
 import time
@@ -37,13 +38,17 @@ app = typer.Typer(help='Set the desktop wallpaper by fetching radar images from 
 
 def _download_tile(url: str, dest: Path) -> None:
     for attempt in range(settings.max_retries):
-        response = requests.get(url, timeout=settings.request_timeout)
-        if response.status_code == 200:
-            dest.write_bytes(response.content)
-            return
-        wait = settings.retry_backoff_base**attempt
-        logger.warning(f'Download failed ({response.status_code}), retrying in {wait}s...')
-        time.sleep(wait)
+        try:
+            response = requests.get(url, timeout=settings.request_timeout)
+        except requests.RequestException as exc:
+            logger.warning(f'Download failed ({exc}), retrying...')
+        else:
+            if response.status_code == 200:
+                dest.write_bytes(response.content)
+                return
+            logger.warning(f'Download failed ({response.status_code}), retrying...')
+        cap = settings.retry_backoff_base ** (attempt + 1)
+        time.sleep(random.uniform(0, cap))  # nosec B311
     else:
         response.raise_for_status()
 

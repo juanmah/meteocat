@@ -27,8 +27,8 @@ class WallpaperSettings(BaseModel):
     radar_offset_y: int = 80
 
     request_timeout: int = 30
-    max_retries: int = 3
-    retry_backoff_base: int = 2
+    max_retries: int = 5
+    retry_backoff_base: int = 4
 
 
 settings = WallpaperSettings()
