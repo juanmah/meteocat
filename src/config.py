@@ -10,8 +10,6 @@ class WallpaperSettings(BaseModel):
     background_4k: Path = Path('background/background_4K.png')
     background_4k_dark: Path = Path('background/background_4K_dark.png')
     radar: Path = Path('output/radar.png')
-    composite: Path = Path('wallpaper.svg')
-    composite_dark: Path = Path('wallpaper_dark.svg')
     wallpaper: Path = Path('output/wallpaper.png')
     wallpaper_dark: Path = Path('output/wallpaper_dark.png')
 

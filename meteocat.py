@@ -11,7 +11,6 @@ import glob
 import logging
 import os
 import random
-import subprocess  # nosec B404
 import tempfile
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -70,7 +69,7 @@ def _assemble_tiles(tiles: list[Path], columns: int) -> Image.Image:
 
 
 def _check_dependencies() -> None:
-    for command, package in {'inkscape': 'inkscape', 'gsettings': 'glib2', 'uv': 'uv'}.items():
+    for command, package in {'gsettings': 'glib2', 'uv': 'uv'}.items():
         if which(command) is None:
             logger.error(
                 f'[red]ERROR[/red]: [black][bold]{command}[/bold] command not found. '
@@ -126,6 +125,17 @@ def generate_background() -> None:
         img_dark.save(settings.background_4k_dark)
 
 
+def _composite_radar(background_path: Path, radar_path: Path, output_path: Path, opacity: float) -> None:
+    background = Image.open(background_path).convert('RGBA')
+    radar = Image.open(radar_path).convert('RGBA')
+    radar = radar.resize((int(background.width * 1.895), int(background.height * 1.895)), Image.LANCZOS)
+    alpha = radar.split()[3]
+    alpha = alpha.point(lambda p: int(p * opacity))
+    radar.putalpha(alpha)
+    background.paste(radar, (-2402, -299), radar)
+    background.convert('RGB').save(output_path)
+
+
 def _set_wallpaper(path: Path, dark: bool = False) -> None:
     import gi
 
@@ -173,15 +183,8 @@ def generate_wallpaper() -> None:
         tile_paths = [Path(t) for t in tiles]
         canvas = _assemble_tiles(tile_paths, columns=3)
         canvas.save(settings.radar)
-    inkscape = which('inkscape')
-    subprocess.run(  # nosec B603
-        [inkscape, '--export-type=png', settings.composite, '--export-filename', settings.wallpaper],
-        check=True,
-    )
-    subprocess.run(  # nosec B603
-        [inkscape, '--export-type=png', settings.composite_dark, '--export-filename', settings.wallpaper_dark],
-        check=True,
-    )
+    _composite_radar(settings.background_4k, settings.radar, settings.wallpaper, 0.8)
+    _composite_radar(settings.background_4k_dark, settings.radar, settings.wallpaper_dark, 0.3)
     wallpaper = Path(os.path.abspath(settings.wallpaper))
     _set_wallpaper(wallpaper)
     wallpaper_dark = Path(os.path.abspath(settings.wallpaper_dark))
