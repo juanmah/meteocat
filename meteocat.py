@@ -11,8 +11,10 @@ import logging
 import os
 import subprocess
 import tempfile
+import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from shutil import which
 
 import requests
@@ -35,6 +37,10 @@ BACKGROUND_TILE_OFFSET_X = 510
 BACKGROUND_TILE_OFFSET_Y = 638
 BACKGROUND_TILE_MAX_Y = 647
 
+REQUEST_TIMEOUT = 30
+MAX_RETRIES = 3
+RETRY_BACKOFF_BASE = 2
+
 RADAR_TILE_RANGE_X = range(63, 66)
 RADAR_TILE_RANGE_Y = range(79, 81)
 RADAR_OFFSET_X = 63
@@ -47,6 +53,19 @@ rich_handler.setFormatter(logging.Formatter('%(message)s', datefmt='[%X]'))
 logger.addHandler(rich_handler)
 
 app = typer.Typer(help='Set the desktop wallpaper by fetching radar images from meteo.cat.')
+
+
+def _download_tile(url: str, dest: Path) -> None:
+    for attempt in range(MAX_RETRIES):
+        response = requests.get(url, timeout=REQUEST_TIMEOUT)
+        if response.status_code == 200:
+            dest.write_bytes(response.content)
+            return
+        wait = RETRY_BACKOFF_BASE**attempt
+        logger.warning(f'Download failed ({response.status_code}), retrying in {wait}s...')
+        time.sleep(wait)
+    else:
+        response.raise_for_status()
 
 
 @app.command()
@@ -70,20 +89,16 @@ def check_dependencies():
 def generate_background():
     """Generate the background map of Catalonia from meteo.cat sources, and adapt it to 4K."""
 
-    def _download_tile(args):
+    def _download_background_tile(args):
         x, y, temp_dir = args
         url = f'https://static-m.meteo.cat/tiles/fons/GoogleMapsCompatible/10/000/000/{x}/000/000/{y}.png'
-        response = requests.get(url)
-        # Transform 'absolute' coordinates in 'relative' ones. Fixing order.
-        with open(
-            f'{temp_dir}/background-{-(y - BACKGROUND_TILE_MAX_Y):02}-{(x - BACKGROUND_TILE_OFFSET_X):02}.png', 'wb'
-        ) as f:
-            f.write(response.content)
+        dest = Path(temp_dir) / f'background-{-(y - BACKGROUND_TILE_MAX_Y):02}-{(x - BACKGROUND_TILE_OFFSET_X):02}.png'
+        _download_tile(url, dest)
 
     with tempfile.TemporaryDirectory() as temp_dir:
         tasks = [(x, y, temp_dir) for x in BACKGROUND_TILE_RANGE_X for y in BACKGROUND_TILE_RANGE_Y]
         with ThreadPoolExecutor(max_workers=10) as executor:
-            list(tqdm(executor.map(_download_tile, tasks), total=len(tasks)))
+            list(tqdm(executor.map(_download_background_tile, tasks), total=len(tasks)))
         tiles = f'{temp_dir}/background-*.png'
         # Join background
         subprocess.call(f'montage -tile 18x -geometry +0+0 {tiles} {BACKGROUND_RAW}', shell=True)
@@ -119,10 +134,8 @@ def generate_wallpaper():
         x, y, temp_dir, now = args
         date = f'{now.year}/{now.month:02}/{now.day:02}/{now.hour:02}/{now.minute // 6 * 6:02}'
         url = f'https://static-m.meteo.cat/tiles/radar/{date}/07/000/000/0{x}/000/000/0{y}.png'
-        response = requests.get(url)
-        # Transform 'absolute' coordinates in 'relative' ones. Fixing order.
-        with open(f'{temp_dir}/radar-{(-(y - RADAR_OFFSET_Y))}-{(x - RADAR_OFFSET_X)}.png', 'wb') as f:
-            f.write(response.content)
+        dest = Path(temp_dir) / f'radar-{(-(y - RADAR_OFFSET_Y))}-{(x - RADAR_OFFSET_X)}.png'
+        _download_tile(url, dest)
 
     with tempfile.TemporaryDirectory() as temp_dir:
         now = datetime.now(UTC) - timedelta(minutes=12)
