@@ -22,29 +22,7 @@ import typer
 from rich.logging import RichHandler
 from tqdm import tqdm
 
-BACKGROUND_RAW = 'background/background_raw.png'
-BACKGROUND_4K = 'background/background_4K.png'
-BACKGROUND_4K_DARK = 'background/background_4K_dark.png'
-RADAR = 'output/radar.png'
-COMPOSITE = 'wallpaper.svg'
-COMPOSITE_DARK = 'wallpaper_dark.svg'
-WALLPAPER = 'output/wallpaper.png'
-WALLPAPER_DARK = 'output/wallpaper_dark.png'
-
-BACKGROUND_TILE_RANGE_X = range(510, 528)
-BACKGROUND_TILE_RANGE_Y = range(638, 648)
-BACKGROUND_TILE_OFFSET_X = 510
-BACKGROUND_TILE_OFFSET_Y = 638
-BACKGROUND_TILE_MAX_Y = 647
-
-REQUEST_TIMEOUT = 30
-MAX_RETRIES = 3
-RETRY_BACKOFF_BASE = 2
-
-RADAR_TILE_RANGE_X = range(63, 66)
-RADAR_TILE_RANGE_Y = range(79, 81)
-RADAR_OFFSET_X = 63
-RADAR_OFFSET_Y = 80
+from src.config import settings
 
 logger = logging.getLogger('meteocat')
 logger.setLevel(logging.INFO)
@@ -56,12 +34,12 @@ app = typer.Typer(help='Set the desktop wallpaper by fetching radar images from 
 
 
 def _download_tile(url: str, dest: Path) -> None:
-    for attempt in range(MAX_RETRIES):
-        response = requests.get(url, timeout=REQUEST_TIMEOUT)
+    for attempt in range(settings.max_retries):
+        response = requests.get(url, timeout=settings.request_timeout)
         if response.status_code == 200:
             dest.write_bytes(response.content)
             return
-        wait = RETRY_BACKOFF_BASE**attempt
+        wait = settings.retry_backoff_base**attempt
         logger.warning(f'Download failed ({response.status_code}), retrying in {wait}s...')
         time.sleep(wait)
     else:
@@ -92,29 +70,29 @@ def generate_background():
     def _download_background_tile(args):
         x, y, temp_dir = args
         url = f'https://static-m.meteo.cat/tiles/fons/GoogleMapsCompatible/10/000/000/{x}/000/000/{y}.png'
-        dest = Path(temp_dir) / f'background-{-(y - BACKGROUND_TILE_MAX_Y):02}-{(x - BACKGROUND_TILE_OFFSET_X):02}.png'
+        dest = (
+            Path(temp_dir) / f'background-'
+            f'{-(y - settings.background_tile_max_y):02}-'
+            f'{(x - settings.background_tile_offset_x):02}.png'
+        )
         _download_tile(url, dest)
 
     with tempfile.TemporaryDirectory() as temp_dir:
-        tasks = [(x, y, temp_dir) for x in BACKGROUND_TILE_RANGE_X for y in BACKGROUND_TILE_RANGE_Y]
+        tasks = [(x, y, temp_dir) for x in settings.background_tile_range_x for y in settings.background_tile_range_y]
         with ThreadPoolExecutor(max_workers=10) as executor:
             list(tqdm(executor.map(_download_background_tile, tasks), total=len(tasks)))
         tiles = f'{temp_dir}/background-*.png'
-        # Join background
-        subprocess.call(f'montage -tile 18x -geometry +0+0 {tiles} {BACKGROUND_RAW}', shell=True)
-        # Crop to 4K
+        subprocess.call(f'montage -tile 18x -geometry +0+0 {tiles} {settings.background_raw}', shell=True)
         subprocess.call(
-            f'magick {BACKGROUND_RAW} -crop 3840x2160+300+300 '
+            f'magick {settings.background_raw} -crop 3840x2160+300+300 '
             '-fill "#9c9c9c" -draw "rectangle 2266,2029 2340,2078" '
-            f'{BACKGROUND_4K}',
+            f'{settings.background_4k}',
             shell=True,
         )
-
-        # Crop to 4K dark
-        subprocess.call(f'magick {BACKGROUND_4K} -alpha off -negate {BACKGROUND_4K_DARK}', shell=True)
+        subprocess.call(f'magick {settings.background_4k} -alpha off -negate {settings.background_4k_dark}', shell=True)
         subprocess.call(
-            f'magick {BACKGROUND_4K_DARK} -fill "#292929" -fuzz "9000" -draw "color 3839,2159 floodfill" '
-            f'{BACKGROUND_4K_DARK}',
+            f'magick {settings.background_4k_dark} -fill "#292929" -fuzz "9000" -draw "color 3839,2159 floodfill" '
+            f'{settings.background_4k_dark}',
             shell=True,
         )
 
@@ -129,29 +107,31 @@ def generate_wallpaper():
         logger.info('> Generating a background map of Catalonia from meteo.cat sources.')
         generate_background()
 
-    # Get current radar map
     def _download_radar_tile(args):
         x, y, temp_dir, now = args
         date = f'{now.year}/{now.month:02}/{now.day:02}/{now.hour:02}/{now.minute // 6 * 6:02}'
         url = f'https://static-m.meteo.cat/tiles/radar/{date}/07/000/000/0{x}/000/000/0{y}.png'
-        dest = Path(temp_dir) / f'radar-{(-(y - RADAR_OFFSET_Y))}-{(x - RADAR_OFFSET_X)}.png'
+        dest = Path(temp_dir) / f'radar-{-(y - settings.radar_offset_y)}-{(x - settings.radar_offset_x)}.png'
         _download_tile(url, dest)
 
     with tempfile.TemporaryDirectory() as temp_dir:
         now = datetime.now(UTC) - timedelta(minutes=12)
-        tasks = [(x, y, temp_dir, now) for x in RADAR_TILE_RANGE_X for y in RADAR_TILE_RANGE_Y]
+        tasks = [(x, y, temp_dir, now) for x in settings.radar_tile_range_x for y in settings.radar_tile_range_y]
         with ThreadPoolExecutor(max_workers=10) as executor:
             list(tqdm(executor.map(_download_radar_tile, tasks), total=len(tasks)))
         tiles = f'{temp_dir}/radar-*.png'
-        # Join radar
-        subprocess.call(f'montage -tile 3x -geometry +0+0 -background none {tiles} {RADAR}', shell=True)
-    # Generate wallpaper with background and radar
-    subprocess.call(f'inkscape --export-type="png" {COMPOSITE} --export-filename={WALLPAPER}', shell=True)
-    subprocess.call(f'inkscape --export-type="png" {COMPOSITE_DARK} --export-filename={WALLPAPER_DARK}', shell=True)
-    # Set wallpaper as the desktop background
-    wallpaper = os.path.abspath(WALLPAPER)
+        subprocess.call(f'montage -tile 3x -geometry +0+0 -background none {tiles} {settings.radar}', shell=True)
+    subprocess.call(
+        f'inkscape --export-type="png" {settings.composite} --export-filename={settings.wallpaper}',
+        shell=True,
+    )
+    subprocess.call(
+        f'inkscape --export-type="png" {settings.composite_dark} --export-filename={settings.wallpaper_dark}',
+        shell=True,
+    )
+    wallpaper = os.path.abspath(settings.wallpaper)
     subprocess.call(f'dbus-launch gsettings set org.gnome.desktop.background picture-uri {wallpaper}', shell=True)
-    wallpaper_dark = os.path.abspath(WALLPAPER_DARK)
+    wallpaper_dark = os.path.abspath(settings.wallpaper_dark)
     subprocess.call(
         f'dbus-launch gsettings set org.gnome.desktop.background picture-uri-dark {wallpaper_dark}', shell=True
     )

@@ -7,4 +7,5 @@ dependencies = [
     "typer",
     "tqdm",
     "rich",
+    "pydantic>=2.13.5",
 ]
