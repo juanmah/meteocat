@@ -62,7 +62,7 @@ def _assemble_tiles(tiles: list[Path], columns: int) -> Image.Image:
 
 
 def _check_dependencies() -> None:
-    for command, package in {'inkscape': 'inkscape', 'gsettings': 'glib2'}.items():
+    for command, package in {'inkscape': 'inkscape', 'gsettings': 'glib2', 'uv': 'uv'}.items():
         if which(command) is None:
             logger.error(
                 f'[red]ERROR[/red]: [black][bold]{command}[/bold] command not found. '
