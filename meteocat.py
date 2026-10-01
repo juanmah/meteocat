@@ -7,6 +7,7 @@ This script automates the creation of a desktop background combining radar maps 
 also sourced from meteo.cat.
 """
 
+import glob
 import logging
 import os
 import subprocess
@@ -81,19 +82,42 @@ def generate_background():
         tasks = [(x, y, temp_dir) for x in settings.background_tile_range_x for y in settings.background_tile_range_y]
         with ThreadPoolExecutor(max_workers=10) as executor:
             list(tqdm(executor.map(_download_background_tile, tasks), total=len(tasks)))
-        tiles = f'{temp_dir}/background-*.png'
-        subprocess.call(f'montage -tile 18x -geometry +0+0 {tiles} {settings.background_raw}', shell=True)
-        subprocess.call(
-            f'magick {settings.background_raw} -crop 3840x2160+300+300 '
-            '-fill "#9c9c9c" -draw "rectangle 2266,2029 2340,2078" '
-            f'{settings.background_4k}',
-            shell=True,
+        tiles = sorted(glob.glob(f'{temp_dir}/background-*.png'))
+        subprocess.run(
+            ['montage', '-tile', '18x', '-geometry', '+0+0', *tiles, settings.background_raw],
+            check=True,
         )
-        subprocess.call(f'magick {settings.background_4k} -alpha off -negate {settings.background_4k_dark}', shell=True)
-        subprocess.call(
-            f'magick {settings.background_4k_dark} -fill "#292929" -fuzz "9000" -draw "color 3839,2159 floodfill" '
-            f'{settings.background_4k_dark}',
-            shell=True,
+        subprocess.run(
+            [
+                'magick',
+                settings.background_raw,
+                '-crop',
+                '3840x2160+300+300',
+                '-fill',
+                '#9c9c9c',
+                '-draw',
+                'rectangle 2266,2029 2340,2078',
+                settings.background_4k,
+            ],
+            check=True,
+        )
+        subprocess.run(
+            ['magick', settings.background_4k, '-alpha', 'off', '-negate', settings.background_4k_dark],
+            check=True,
+        )
+        subprocess.run(
+            [
+                'magick',
+                settings.background_4k_dark,
+                '-fill',
+                '#292929',
+                '-fuzz',
+                '9000',
+                '-draw',
+                'color 3839,2159 floodfill',
+                settings.background_4k_dark,
+            ],
+            check=True,
         )
 
 
@@ -119,21 +143,28 @@ def generate_wallpaper():
         tasks = [(x, y, temp_dir, now) for x in settings.radar_tile_range_x for y in settings.radar_tile_range_y]
         with ThreadPoolExecutor(max_workers=10) as executor:
             list(tqdm(executor.map(_download_radar_tile, tasks), total=len(tasks)))
-        tiles = f'{temp_dir}/radar-*.png'
-        subprocess.call(f'montage -tile 3x -geometry +0+0 -background none {tiles} {settings.radar}', shell=True)
-    subprocess.call(
-        f'inkscape --export-type="png" {settings.composite} --export-filename={settings.wallpaper}',
-        shell=True,
+        tiles = sorted(glob.glob(f'{temp_dir}/radar-*.png'))
+        subprocess.run(
+            ['montage', '-tile', '3x', '-geometry', '+0+0', '-background', 'none', *tiles, settings.radar],
+            check=True,
+        )
+    subprocess.run(
+        ['inkscape', '--export-type=png', settings.composite, '--export-filename', settings.wallpaper],
+        check=True,
     )
-    subprocess.call(
-        f'inkscape --export-type="png" {settings.composite_dark} --export-filename={settings.wallpaper_dark}',
-        shell=True,
+    subprocess.run(
+        ['inkscape', '--export-type=png', settings.composite_dark, '--export-filename', settings.wallpaper_dark],
+        check=True,
     )
     wallpaper = os.path.abspath(settings.wallpaper)
-    subprocess.call(f'dbus-launch gsettings set org.gnome.desktop.background picture-uri {wallpaper}', shell=True)
+    subprocess.run(
+        ['dbus-launch', 'gsettings', 'set', 'org.gnome.desktop.background', 'picture-uri', wallpaper],
+        check=True,
+    )
     wallpaper_dark = os.path.abspath(settings.wallpaper_dark)
-    subprocess.call(
-        f'dbus-launch gsettings set org.gnome.desktop.background picture-uri-dark {wallpaper_dark}', shell=True
+    subprocess.run(
+        ['dbus-launch', 'gsettings', 'set', 'org.gnome.desktop.background', 'picture-uri-dark', wallpaper_dark],
+        check=True,
     )
     logger.info('Updated meteo.cat radar background.')
 
