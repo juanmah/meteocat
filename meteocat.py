@@ -28,7 +28,7 @@ from src.config import settings
 logger = logging.getLogger('meteocat')
 logger.setLevel(logging.INFO)
 if sys.stderr.isatty():
-    rich_handler = RichHandler(rich_tracebacks=True)
+    rich_handler = RichHandler(rich_tracebacks=True, markup=True)
     rich_handler.setFormatter(logging.Formatter('%(message)s', datefmt='[%X]'))
     logger.addHandler(rich_handler)
 else:
@@ -113,13 +113,12 @@ def generate_background() -> None:
         tasks = [(x, y, temp_dir) for x in settings.background_tile_range_x for y in settings.background_tile_range_y]
         with ThreadPoolExecutor(max_workers=10) as executor:
             list(tqdm(executor.map(_download_background_tile, tasks), total=len(tasks)))
-        tiles = sorted(str(p) for p in Path(temp_dir).glob('background-*.png'))
+        tiles = sorted(Path(temp_dir).glob('background-*.png'))
         expected = len(settings.background_tile_range_x) * len(settings.background_tile_range_y)
         if len(tiles) != expected:
             logger.error(f'Expected {expected} background tiles, got {len(tiles)}')
             raise SystemExit(1)
-        tile_paths = [Path(t) for t in tiles]
-        canvas = _assemble_tiles(tile_paths, columns=18)
+        canvas = _assemble_tiles(tiles, columns=18)
         canvas.save(settings.background_raw)
         img = Image.open(settings.background_raw)
         img = img.crop((300, 300, 300 + 3840, 300 + 2160))
@@ -167,7 +166,7 @@ def main(ctx: typer.Context) -> None:
 def generate_wallpaper() -> None:
     """Generate a wallpaper with an updated meteo.cat radar map."""
     _check_dependencies()
-    if not Path('background/background_4K.png').is_file():
+    if not settings.background_4k.is_file():
         logger.info("> Background doesn't exist.")
         logger.info('> Generating a background map of Catalonia from meteo.cat sources.')
         generate_background()
@@ -184,19 +183,18 @@ def generate_wallpaper() -> None:
         tasks = [(x, y, temp_dir, now) for x in settings.radar_tile_range_x for y in settings.radar_tile_range_y]
         with ThreadPoolExecutor(max_workers=10) as executor:
             list(tqdm(executor.map(_download_radar_tile, tasks), total=len(tasks)))
-        tiles = sorted(str(p) for p in Path(temp_dir).glob('radar-*.png'))
+        tiles = sorted(Path(temp_dir).glob('radar-*.png'))
         expected = len(settings.radar_tile_range_x) * len(settings.radar_tile_range_y)
         if len(tiles) != expected:
             logger.error(f'Expected {expected} radar tiles, got {len(tiles)}')
             raise SystemExit(1)
-        tile_paths = [Path(t) for t in tiles]
-        canvas = _assemble_tiles(tile_paths, columns=3)
+        canvas = _assemble_tiles(tiles, columns=3)
         canvas.save(settings.radar)
     _composite_radar(settings.background_4k, settings.radar, settings.wallpaper, 0.8)
     _composite_radar(settings.background_4k_dark, settings.radar, settings.wallpaper_dark, 0.3)
-    wallpaper = Path(Path(settings.wallpaper).resolve())
+    wallpaper = settings.wallpaper.resolve()
     _set_wallpaper(wallpaper)
-    wallpaper_dark = Path(Path(settings.wallpaper_dark).resolve())
+    wallpaper_dark = settings.wallpaper_dark.resolve()
     _set_wallpaper(wallpaper_dark, dark=True)
     logger.info('Updated meteo.cat radar background.')
 
