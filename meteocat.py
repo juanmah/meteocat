@@ -73,14 +73,15 @@ def _check_dependencies() -> None:
 
 
 @app.command()
-def check_dependencies():
+def check_dependencies() -> None:
     """Check for required system packages dependencies and give information if any are missing."""
     _check_dependencies()
 
 
 @app.command()
-def generate_background():
+def generate_background() -> None:
     """Generate the background map of Catalonia from meteo.cat sources, and adapt it to 4K."""
+    _check_dependencies()
 
     def _download_background_tile(args: tuple[int, int, str]) -> None:
         x, y, temp_dir = args
@@ -129,14 +130,14 @@ def _set_wallpaper(path: Path, dark: bool = False) -> None:
 
 
 @app.callback(invoke_without_command=True)
-def main(ctx: typer.Context):
+def main(ctx: typer.Context) -> None:
     if ctx.invoked_subcommand is None:
         typer.echo(ctx.get_help())
         raise typer.Exit()
 
 
 @app.command()
-def generate_wallpaper():
+def generate_wallpaper() -> None:
     """Generate a wallpaper with an updated meteo.cat radar map."""
     _check_dependencies()
     if not os.path.isfile('background/background_4K.png'):
