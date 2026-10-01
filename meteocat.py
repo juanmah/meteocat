@@ -46,7 +46,10 @@ def _download_tile(url: str, dest: Path) -> None:
             if response.status_code == 200:
                 dest.write_bytes(response.content)
                 return
-            logger.warning(f'Download failed ({response.status_code}), retrying...')
+            logger.warning(
+                f'Download failed ({response.status_code}) for {url}, '
+                f'attempt {attempt + 1}/{settings.max_retries}, retrying...'
+            )
         cap = settings.retry_backoff_base ** (attempt + 1)
         time.sleep(random.uniform(0, cap))  # nosec B311
     else:
