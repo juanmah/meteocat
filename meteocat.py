@@ -29,6 +29,17 @@ COMPOSITE_DARK = 'wallpaper_dark.svg'
 WALLPAPER = 'output/wallpaper.png'
 WALLPAPER_DARK = 'output/wallpaper_dark.png'
 
+BACKGROUND_TILE_RANGE_X = range(510, 528)
+BACKGROUND_TILE_RANGE_Y = range(638, 648)
+BACKGROUND_TILE_OFFSET_X = 510
+BACKGROUND_TILE_OFFSET_Y = 638
+BACKGROUND_TILE_MAX_Y = 647
+
+RADAR_TILE_RANGE_X = range(63, 66)
+RADAR_TILE_RANGE_Y = range(79, 81)
+RADAR_OFFSET_X = 63
+RADAR_OFFSET_Y = 80
+
 logger = logging.getLogger('meteocat')
 logger.setLevel(logging.INFO)
 rich_handler = RichHandler(rich_tracebacks=True)
@@ -64,11 +75,13 @@ def generate_background():
         url = f'https://static-m.meteo.cat/tiles/fons/GoogleMapsCompatible/10/000/000/{x}/000/000/{y}.png'
         response = requests.get(url)
         # Transform 'absolute' coordinates in 'relative' ones. Fixing order.
-        with open(f'{temp_dir}/background-{-(y-647):02}-{(x-510):02}.png', 'wb') as f:
+        with open(
+            f'{temp_dir}/background-{-(y - BACKGROUND_TILE_MAX_Y):02}-{(x - BACKGROUND_TILE_OFFSET_X):02}.png', 'wb'
+        ) as f:
             f.write(response.content)
 
     with tempfile.TemporaryDirectory() as temp_dir:
-        tasks = [(x, y, temp_dir) for x in range(510, 528) for y in range(638, 648)]
+        tasks = [(x, y, temp_dir) for x in BACKGROUND_TILE_RANGE_X for y in BACKGROUND_TILE_RANGE_Y]
         with ThreadPoolExecutor(max_workers=10) as executor:
             list(tqdm(executor.map(_download_tile, tasks), total=len(tasks)))
         tiles = f'{temp_dir}/background-*.png'
@@ -108,12 +121,12 @@ def generate_wallpaper():
         url = f'https://static-m.meteo.cat/tiles/radar/{date}/07/000/000/0{x}/000/000/0{y}.png'
         response = requests.get(url)
         # Transform 'absolute' coordinates in 'relative' ones. Fixing order.
-        with open(f'{temp_dir}/radar-{(-(y-80))}-{(x-63)}.png', 'wb') as f:
+        with open(f'{temp_dir}/radar-{(-(y - RADAR_OFFSET_Y))}-{(x - RADAR_OFFSET_X)}.png', 'wb') as f:
             f.write(response.content)
 
     with tempfile.TemporaryDirectory() as temp_dir:
         now = datetime.now(UTC) - timedelta(minutes=12)
-        tasks = [(x, y, temp_dir, now) for x in range(63, 66) for y in range(79, 81)]
+        tasks = [(x, y, temp_dir, now) for x in RADAR_TILE_RANGE_X for y in RADAR_TILE_RANGE_Y]
         with ThreadPoolExecutor(max_workers=10) as executor:
             list(tqdm(executor.map(_download_radar_tile, tasks), total=len(tasks)))
         tiles = f'{temp_dir}/radar-*.png'
