@@ -128,7 +128,6 @@ def _set_wallpaper(path: Path, dark: bool = False) -> None:
     gsettings.set_string(key, f'file://{path}')
 
 
-@app.command()
 @app.callback(invoke_without_command=True)
 def generate_wallpaper():
     """Generate a wallpaper with an updated meteo.cat radar map."""
