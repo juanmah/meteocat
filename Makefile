@@ -43,7 +43,6 @@ uninstall-service: ## Uninstall systemd user service and timer
 status: ## Verify systemd timer status and generated files
 	@printf "$(CYAN)=== Timer Status ===$(RESET)\n\n"
 	@systemctl --user list-timers --no-pager | grep -q meteocat_wallpaper_generator.timer && printf "$(GREEN)Timer is active$(RESET)\n" || (printf "$(BOLD)Timer not found$(RESET)\n" && exit 1)
-	@printf "$(BOLD)Next run:$(RESET) " && systemctl show meteocat_wallpaper_generator.timer --property=NextElapseUSecRealtime --value | awk '{if ($$1 != "" && $$1 != "0") { printf "%s", strftime("%Y-%m-%d %H:%M:%S", $$1/1000000); exit } } END { if (NR == 0 || $$1 == "" || $$1 == "0") printf "$(RED)not scheduled$(RESET)\n" }'
 	@systemctl --user status --no-pager meteocat_wallpaper_generator.timer
 	@printf "\n$(CYAN)=== Generated Files ===$(RESET)\n\n"
 	@test -f background/background_4K.png && printf "$(GREEN)background/background_4K.png exists$(RESET)\n" || printf "$(RED)background/background_4K.png missing$(RESET)\n"

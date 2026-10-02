@@ -28,7 +28,7 @@ class WallpaperSettings(BaseModel):
     background_columns: int = 18
     radar_columns: int = 3
     max_workers: int = 10
-    radar_delay_minutes: int = 12
+    radar_delay_minutes: int = 15
 
     request_timeout: int = 30
     max_retries: int = 5
