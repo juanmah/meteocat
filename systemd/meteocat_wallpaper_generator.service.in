@@ -1,0 +1,7 @@
+[Unit]
+Description=meteo.cat wallpaper generator
+
+[Service]
+Type=oneshot
+WorkingDirectory={{WORKING_DIRECTORY}}
+ExecStart=/usr/bin/uv run ./meteocat.py generate-wallpaper

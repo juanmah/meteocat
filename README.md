@@ -41,66 +41,17 @@ To generate the wallpaper and set it as your desktop background, simply run:
 
 ## Run periodically
 
-To schedule this script to run every 6 minutes using systemd timer, you can follow these steps:
+To schedule this script to run every 6 minutes using a user systemd timer, you can use the Makefile:
 
-1. Create a `.service` file named `meteocat_wallpaper_generator.service` in the `/etc/systemd/system/` directory with the following contents:
+```console
+> make install-service
+```
 
-    ```ini
-    [Unit]
-    Description=meteo.cat wallpaper generator
+This will:
 
-    [Service]
-    User=<<user>>
-    Type=oneshot
-    WorkingDirectory=/<<path>>/meteocat
-    ExecStart=/usr/bin/uv run ./meteocat.py generate-wallpaper
-    ```
-
-    - The `WorkingDirectory` directive specifies the absolute path to the directory where the script is located.
-    - The `ExecStart` directive specifies the absolute path to the script.
-
-1. Create a `.timer` file named `meteocat_wallpaper_generator.timer` in the `/etc/systemd/system/` directory with the following contents:
-
-    ```ini
-    [Unit]
-    Description=Run meteo.cat wallpaper generator script every 6 minutes
-
-    [Timer]
-    OnCalendar=*:0/6
-    Persistent=true
-
-    [Install]
-    WantedBy=timers.target
-    ```
-
-    - The `OnCalendar` directive specifies the exact time when the service should be run. In this case, every 6 minutes.
-    - The `Persistent` directive ensures that the service is run even if the system is restarted.
-
-1. Reload the systemd daemon to recognize the new service and timer:
-
-    ```console
-    systemctl daemon-reload
-    ```
-
-1. Start the timer:
-
-    ```console
-    systemctl start meteocat_wallpaper_generator.timer
-    ```
-
-1. Enable the timer so that it starts automatically on boot:
-
-    ```console
-    systemctl enable meteocat_wallpaper_generator.timer
-    ```
-
-1. You can check the status of the timer using the following command:
-
-    ```console
-    systemctl list-timers --all
-    ```
-
-    This will show you all the timers that are currently active on your system. You should see your new timer listed there.
+1. Install `meteocat_wallpaper_generator.service` and `meteocat_wallpaper_generator.timer` in `~/.config/systemd/user/`
+2. Reload the user systemd daemon
+3. Enable and start the timer
 
 ## Disclaimer
 
