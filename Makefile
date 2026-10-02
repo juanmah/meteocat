@@ -47,7 +47,7 @@ status: ## Verify systemd timer status and generated files
 	@systemctl --user status --no-pager meteocat_wallpaper_generator.timer
 	@printf "\n$(CYAN)=== Generated Files ===$(RESET)\n\n"
 	@test -f background/background_4K.png && printf "$(GREEN)background/background_4K.png exists$(RESET)\n" || printf "$(RED)background/background_4K.png missing$(RESET)\n"
-	@test -f output/wallpaper.png && (find output/wallpaper.png -mmin -6 >/dev/null 2>&1 && printf "$(GREEN)output/wallpaper.png is newer than 6 minutes$(RESET)\n" || printf "$(BOLD)WARNING: output/wallpaper.png is older than 6 minutes$(RESET)\n") || (printf "$(RED)output/wallpaper.png missing$(RESET)\n")
+	@test -f output/wallpaper.png && (find output/wallpaper.png -mmin -6 -print | grep -q . && printf "$(GREEN)output/wallpaper.png is newer than 6 minutes$(RESET)\n" || printf "$(BOLD)WARNING: output/wallpaper.png is older than 6 minutes$(RESET)\n") || (printf "$(RED)output/wallpaper.png missing$(RESET)\n")
 
 check-dependencies: ## Check for required system dependencies
 	@uv run meteocat check-dependencies
