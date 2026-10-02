@@ -1,12 +1,3 @@
-#!/usr/bin/env python3
-
-"""
-Set the desktop wallpaper by fetching radar images from meteo.cat.
-
-This script automates the creation of a desktop background combining radar maps with background map of Catalonia,
-also sourced from meteo.cat.
-"""
-
 import logging
 import random
 import sys
@@ -24,7 +15,7 @@ from PIL import Image, ImageDraw, ImageOps
 from rich.logging import RichHandler
 from tqdm import tqdm
 
-from src.config import settings
+from meteocat.config import settings
 
 gi.require_version('Gio', '2.0')
 from gi.repository import Gio  # ruff: ignore[module-import-not-at-top-of-file]
@@ -201,7 +192,3 @@ def generate_wallpaper() -> None:
     wallpaper_dark = settings.wallpaper_dark.resolve()
     _set_wallpaper(wallpaper_dark, dark=True)
     logger.info('Updated meteo.cat radar background.')
-
-
-if __name__ == '__main__':
-    app()

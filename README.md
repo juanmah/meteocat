@@ -23,14 +23,14 @@ The project uses `uv` for dependency management. To set up the environment and i
 ```
 This command will automatically create a virtual environment in the `.venv` directory if one doesn't exist, and then install the dependencies specified in `uv.lock` to ensure reproducible builds.
 
-You can prefix your commands with `uv run`, e.g., `uv run ./meteocat.py`.
+You can prefix your commands with `uv run`, e.g., `uv run meteocat`.
 
 ## Usage
 
 To generate the wallpaper and set it as your desktop background, simply run:
 
 ```console
-> ./meteocat.py generate-wallpaper
+> uv run meteocat generate-wallpaper
 ```
 
 ### Commands

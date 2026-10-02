@@ -50,13 +50,13 @@ status: ## Verify systemd timer status and generated files
 	@test -f output/wallpaper.png && (find output/wallpaper.png -mmin -6 >/dev/null 2>&1 && printf "$(GREEN)output/wallpaper.png is newer than 6 minutes$(RESET)\n" || printf "$(BOLD)WARNING: output/wallpaper.png is older than 6 minutes$(RESET)\n") || (printf "$(RED)output/wallpaper.png missing$(RESET)\n")
 
 check-dependencies: ## Check for required system dependencies
-	@uv run ./meteocat.py check-dependencies
+	@uv run meteocat check-dependencies
 
 generate-background: ## Generate the background map of Catalonia
-	@uv run ./meteocat.py generate-background
+	@uv run meteocat generate-background
 
 generate-wallpaper: ## Generate a wallpaper with updated radar map
-	@uv run ./meteocat.py generate-wallpaper
+	@uv run meteocat generate-wallpaper
 
 logs: ## Show journalctl logs for the meteocat service
 	@journalctl --user -u meteocat_wallpaper_generator.service -n 20 --no-pager
