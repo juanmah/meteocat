@@ -10,7 +10,9 @@ from meteocat.config import settings
 from meteocat.deps import check_dependencies
 from meteocat.download import _download_background_tile, _download_radar_tile
 from meteocat.image import _apply_background_overlays, _assemble_tiles, _composite_radar, _make_dark_variant
+from meteocat.logging import setup
 
+setup()
 logger = logging.getLogger('meteocat')
 
 

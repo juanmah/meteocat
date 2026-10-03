@@ -1,10 +1,13 @@
+import logging
 import subprocess  # ruff: ignore[suspicious-subprocess-import] # nosec B404
 import sys
 from pathlib import Path
 
-from rich.console import Console
-
 from meteocat.config import settings
+from meteocat.logging import setup
+
+setup()
+logger = logging.getLogger('meteocat')
 
 
 def _run(args: list[str]) -> subprocess.CompletedProcess[str]:
@@ -28,7 +31,7 @@ def install() -> None:
     _run(['systemctl', '--user', 'enable', f'{settings.service_name}.timer'])
     _run(['systemctl', '--user', 'start', f'{settings.service_name}.timer'])
 
-    Console().print(f'Installed {settings.service_name}.service and {settings.service_name}.timer')
+    logger.info('Installed %s.service and %s.timer', settings.service_name, settings.service_name)
 
 
 def uninstall() -> None:
@@ -45,17 +48,15 @@ def uninstall() -> None:
 
     _run(['systemctl', '--user', 'daemon-reload'])
 
-    Console().print(f'Uninstalled {settings.service_name}.service and {settings.service_name}.timer')
+    logger.info('Uninstalled %s.service and %s.timer', settings.service_name, settings.service_name)
 
 
 def status() -> None:
-    console = Console()
-
     result = _run(['systemctl', '--user', 'list-timers', '--no-pager'])
-    console.print(result.stdout)
+    logger.info(result.stdout)
 
     service_result = _run(['systemctl', '--user', 'status', '--no-pager', f'{settings.service_name}.timer'])
-    console.print(service_result.stdout)
+    logger.info(service_result.stdout)
     if service_result.returncode != 0:
-        console.print(f'Timer {settings.service_name}.timer is not active', style='red')
+        logger.error('Timer %s.timer is not active', settings.service_name)
         sys.exit(1)

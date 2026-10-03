@@ -1,19 +1,10 @@
 import logging
-import sys
 from shutil import which
 
-logger = logging.getLogger('meteocat')
-logger.setLevel(logging.INFO)
-if sys.stderr.isatty():
-    from rich.logging import RichHandler
+from meteocat.logging import setup
 
-    rich_handler = RichHandler(rich_tracebacks=True, markup=True)
-    rich_handler.setFormatter(logging.Formatter('%(message)s', datefmt='[%X]'))
-    logger.addHandler(rich_handler)
-else:
-    handler = logging.StreamHandler()
-    handler.setFormatter(logging.Formatter('%(message)s'))
-    logger.addHandler(handler)
+logger = logging.getLogger('meteocat')
+setup()
 
 
 def check_dependencies() -> None:

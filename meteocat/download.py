@@ -7,7 +7,9 @@ from time import sleep
 import requests
 
 from meteocat.config import settings
+from meteocat.logging import setup
 
+setup()
 logger = getLogger('meteocat')
 
 
