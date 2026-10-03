@@ -9,9 +9,9 @@ class WallpaperSettings(BaseModel):
     background_raw: Path = Path('background/background_raw.png')
     background_4k: Path = Path('background/background_4K.png')
     background_4k_dark: Path = Path('background/background_4K_dark.png')
-    radar: Path = Path('output/radar.png')
-    wallpaper: Path = Path('output/wallpaper.png')
-    wallpaper_dark: Path = Path('output/wallpaper_dark.png')
+    radar: Path = Path('radar.png')
+    wallpaper: Path = Path('wallpaper/wallpaper.png')
+    wallpaper_dark: Path = Path('wallpaper/wallpaper_dark.png')
 
     background_tile_range_x: range = range(510, 528)
     background_tile_range_y: range = range(638, 648)
