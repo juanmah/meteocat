@@ -112,6 +112,7 @@ def generate_background() -> None:
             logger.error(f'Expected {expected} background tiles, got {len(tiles)}')
             raise SystemExit(1)
         canvas = _assemble_tiles(tiles, columns=settings.background_columns)
+        settings.background_raw.parent.mkdir(parents=True, exist_ok=True)
         canvas.save(settings.background_raw)
         crop_left = settings.crop_left
         crop_top = settings.crop_top
@@ -184,6 +185,7 @@ def generate_wallpaper() -> None:
             logger.error(f'Expected {expected} radar tiles, got {len(tiles)}')
             raise SystemExit(1)
         canvas = _assemble_tiles(tiles, columns=settings.radar_columns)
+        settings.radar.parent.mkdir(parents=True, exist_ok=True)
         canvas.save(settings.radar)
     _composite_radar(settings.background_4k, settings.radar, settings.wallpaper, settings.opacity_radar)
     _composite_radar(settings.background_4k_dark, settings.radar, settings.wallpaper_dark, settings.opacity_radar_dark)
