@@ -1,7 +1,5 @@
 import typer
 
-from meteocat.deps import check_dependencies as _check_dependencies
-
 app = typer.Typer(help='Set the desktop wallpaper by fetching radar images from meteo.cat.')
 
 
@@ -15,9 +13,9 @@ def main(ctx: typer.Context) -> None:
 @app.command()
 def check_dependencies() -> None:
     """Check for required system packages dependencies and give information if any are missing."""
+    from meteocat.deps import check_dependencies
 
-
-_check_dependencies()
+    check_dependencies()
 
 
 @app.command()
@@ -34,3 +32,27 @@ def generate_wallpaper() -> None:
     from meteocat.wallpaper import generate_wallpaper
 
     generate_wallpaper()
+
+
+@app.command()
+def install_systemd() -> None:
+    """Install the systemd user service and timer."""
+    from meteocat.systemd import install
+
+    install()
+
+
+@app.command()
+def uninstall_systemd() -> None:
+    """Uninstall the systemd user service and timer."""
+    from meteocat.systemd import uninstall
+
+    uninstall()
+
+
+@app.command()
+def status_systemd() -> None:
+    """Show the systemd timer status."""
+    from meteocat.systemd import status as _status
+
+    _status()

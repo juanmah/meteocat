@@ -6,6 +6,9 @@ from pydantic import BaseModel
 class WallpaperSettings(BaseModel):
     model_config = {'arbitrary_types_allowed': True}
 
+    service_name: str = 'meteocat_wallpaper_generator'
+    systemd_user_dir: Path = Path.home() / '.config' / 'systemd' / 'user'
+
     background_raw: Path = Path('background/background_raw.png')
     background_4k: Path = Path('background/background_4K.png')
     background_4k_dark: Path = Path('background/background_4K_dark.png')

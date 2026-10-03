@@ -1,4 +1,4 @@
-.PHONY: all test help install update install-service uninstall-service status check-dependencies generate-background generate-wallpaper logs clean
+.PHONY: all test help install update status-systemd check-dependencies generate-background generate-wallpaper logs clean
 
 PROJECT_ROOT := $(shell dirname $(realpath $(firstword $(MAKEFILE_LIST))))
 USER := $(shell whoami)
@@ -25,29 +25,6 @@ install: ## Install Python dependencies
 update: ## Upgrade Python dependencies
 	@uv sync --upgrade
 
-install-service: ## Install systemd user service and timer
-	@mkdir -p ~/.config/systemd/user
-	@sed -e "s|{{WORKING_DIRECTORY}}|$(PROJECT_ROOT)|g" systemd/meteocat_wallpaper_generator.service.in > ~/.config/systemd/user/meteocat_wallpaper_generator.service
-	@sed -e "s|{{WORKING_DIRECTORY}}|$(PROJECT_ROOT)|g" systemd/meteocat_wallpaper_generator.timer.in > ~/.config/systemd/user/meteocat_wallpaper_generator.timer
-	@systemctl --user daemon-reload
-	@systemctl --user enable meteocat_wallpaper_generator.timer
-	@systemctl --user start meteocat_wallpaper_generator.timer
-
-uninstall-service: ## Uninstall systemd user service and timer
-	@systemctl --user stop meteocat_wallpaper_generator.timer
-	@systemctl --user disable meteocat_wallpaper_generator.timer
-	@rm -f ~/.config/systemd/user/meteocat_wallpaper_generator.service
-	@rm -f ~/.config/systemd/user/meteocat_wallpaper_generator.timer
-	@systemctl --user daemon-reload
-
-status: ## Verify systemd timer status and generated files
-	@printf "$(CYAN)=== Timer Status ===$(RESET)\n\n"
-	@systemctl --user list-timers --no-pager | grep -q meteocat_wallpaper_generator.timer && printf "$(GREEN)Timer is active$(RESET)\n" || (printf "$(BOLD)Timer not found$(RESET)\n" && exit 1)
-	@systemctl --user status --no-pager meteocat_wallpaper_generator.timer
-	@printf "\n$(CYAN)=== Generated Files ===$(RESET)\n\n"
-	@test -f background/background_4K.png && printf "$(GREEN)background/background_4K.png exists$(RESET)\n" || printf "$(RED)background/background_4K.png missing$(RESET)\n"
-	@test -f output/wallpaper.png && (find output/wallpaper.png -mmin -6 -print | grep -q . && printf "$(GREEN)output/wallpaper.png is newer than 6 minutes$(RESET)\n" || printf "$(RED)output/wallpaper.png is older than 6 minutes$(RESET)\n") || (printf "$(RED)output/wallpaper.png missing$(RESET)\n")
-
 check-dependencies: ## Check for required system dependencies
 	@uv run meteocat check-dependencies
 
@@ -56,6 +33,15 @@ generate-background: ## Generate the background map of Catalonia
 
 generate-wallpaper: ## Generate a wallpaper with updated radar map
 	@uv run meteocat generate-wallpaper
+
+install-systemd: ## Install systemd user service and timer
+	@uv run meteocat install-systemd
+
+uninstall-systemd: ## Uninstall systemd user service and timer
+	@uv run meteocat uninstall-systemd
+
+status-systemd: ## Verify systemd timer status
+	@uv run meteocat status-systemd
 
 logs: ## Show journalctl logs for the meteocat service
 	@journalctl --user -u meteocat_wallpaper_generator.service -n 20 --no-pager
