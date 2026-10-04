@@ -1,6 +1,13 @@
 from pathlib import Path
 
+import yaml
 from pydantic import BaseModel
+
+
+class ConfigPaths(BaseModel):
+    package: Path = Path(__file__).parent / 'config.yaml'
+    system: Path = Path('/etc/meteocat/config.yaml')
+    user: Path = Path.home() / '.local' / 'share' / 'meteocat' / 'config.yaml'
 
 
 class WallpaperSettings(BaseModel):
@@ -76,4 +83,28 @@ class WallpaperSettings(BaseModel):
     opacity_radar_dark: float = 0.3
 
 
-settings = WallpaperSettings()
+def _load_yaml(path: Path) -> dict[str, object] | None:
+    if path.is_file():
+        return yaml.safe_load(path.read_text())
+    return None
+
+
+def _apply_overrides(base: WallpaperSettings, overrides: dict[str, object]) -> WallpaperSettings:
+    field_names = set(base.model_fields.keys())
+    filtered = {k: v for k, v in overrides.items() if k in field_names}
+    if not filtered:
+        return base
+    return WallpaperSettings(**{**base.model_dump(), **filtered})
+
+
+def _load_config() -> WallpaperSettings:
+    paths = ConfigPaths()
+    result = WallpaperSettings()
+    for path in (paths.package, paths.system, paths.user):
+        data = _load_yaml(path)
+        if data is not None:
+            result = _apply_overrides(result, data)
+    return result
+
+
+settings = _load_config()
