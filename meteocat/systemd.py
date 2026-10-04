@@ -1,7 +1,6 @@
 import logging
 import subprocess  # ruff: ignore[suspicious-subprocess-import] # nosec B404
 import sys
-from pathlib import Path
 
 from meteocat.config import settings
 from meteocat.logging import setup
@@ -15,17 +14,17 @@ def _run(args: list[str]) -> subprocess.CompletedProcess[str]:
 
 
 def install() -> None:
-    project_root = Path(__file__).resolve().parent.parent
     settings.systemd_user_dir.mkdir(parents=True, exist_ok=True)
-
-    service_src = project_root / 'systemd' / f'{settings.service_name}.service.in'
-    timer_src = project_root / 'systemd' / f'{settings.service_name}.timer.in'
+    settings.working_directory.mkdir(parents=True, exist_ok=True)
 
     service_dst = settings.systemd_user_dir / f'{settings.service_name}.service'
     timer_dst = settings.systemd_user_dir / f'{settings.service_name}.timer'
 
-    service_dst.write_text(service_src.read_text().replace('{{WORKING_DIRECTORY}}', str(project_root)))
-    timer_dst.write_text(timer_src.read_text().replace('{{WORKING_DIRECTORY}}', str(project_root)))
+    service_text = settings.service_template.replace('{{WORKING_DIRECTORY}}', str(settings.working_directory)).replace(
+        '{{SERVICE_EXEC}}', settings.service_exec
+    )
+    service_dst.write_text(service_text)
+    timer_dst.write_text(settings.timer_template)
 
     _run(['systemctl', '--user', 'daemon-reload'])
     _run(['systemctl', '--user', 'enable', f'{settings.service_name}.timer'])
