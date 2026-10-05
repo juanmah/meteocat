@@ -69,6 +69,8 @@ class WallpaperSettings(BaseModel):
     max_retries: int = 5
     retry_backoff_base: int = 4
 
+    log_level: str = 'INFO'
+
     crop_left: int = 300
     crop_top: int = 300
     crop_width: int = 3840

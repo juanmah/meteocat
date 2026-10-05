@@ -1,10 +1,17 @@
+import logging
+
 import typer
+
+from meteocat.config import settings
+from meteocat.logging import setup
 
 app = typer.Typer(help='Set the desktop wallpaper by fetching radar images from meteo.cat.')
 
 
 @app.callback(invoke_without_command=True)
 def main(ctx: typer.Context) -> None:
+    level = getattr(logging, settings.log_level.upper(), logging.INFO)
+    setup(level=level)
     if ctx.invoked_subcommand is None:
         typer.echo(ctx.get_help())
         raise typer.Exit

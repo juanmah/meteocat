@@ -4,8 +4,8 @@ import sys
 logger = logging.getLogger('meteocat')
 
 
-def setup() -> None:
-    logger.setLevel(logging.INFO)
+def setup(level: int = logging.INFO) -> None:
+    logger.setLevel(level)
     if logger.handlers:
         return
     if sys.stderr.isatty():
@@ -18,6 +18,5 @@ def setup() -> None:
         handler = logging.StreamHandler()
         handler.setFormatter(logging.Formatter('%(message)s'))
         logger.addHandler(handler)
-
-
-setup()
+    if level <= logging.DEBUG:
+        logger.debug('Command: %s', ' '.join(sys.argv))
