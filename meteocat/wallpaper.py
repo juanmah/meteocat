@@ -1,3 +1,4 @@
+import sys
 import tempfile
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
@@ -10,6 +11,8 @@ from meteocat.deps import check_dependencies
 from meteocat.download import _download_background_tile, _download_radar_tile
 from meteocat.image import _apply_background_overlays, _assemble_tiles, _composite_radar, _make_dark_variant
 from meteocat.logging import logger
+
+_tqdm_disable = not sys.stderr.isatty()
 
 
 def _set_wallpaper(path: Path, *, dark: bool = False) -> None:
@@ -29,7 +32,7 @@ def generate_background() -> None:
     with tempfile.TemporaryDirectory() as temp_dir:
         tasks = [(x, y, temp_dir) for x in settings.background_tile_range_x for y in settings.background_tile_range_y]
         with ThreadPoolExecutor(max_workers=settings.max_workers) as executor:
-            list(tqdm(executor.map(_download_background_tile, tasks), total=len(tasks)))
+            list(tqdm(executor.map(_download_background_tile, tasks), total=len(tasks), disable=_tqdm_disable))
         tiles = sorted(Path(temp_dir).glob('background-*.png'))
         expected = len(settings.background_tile_range_x) * len(settings.background_tile_range_y)
         if len(tiles) != expected:
@@ -60,7 +63,7 @@ def generate_wallpaper() -> None:
         now = datetime.now(UTC) - timedelta(minutes=settings.radar_delay_minutes)
         tasks = [(x, y, temp_dir, now) for x in settings.radar_tile_range_x for y in settings.radar_tile_range_y]
         with ThreadPoolExecutor(max_workers=settings.max_workers) as executor:
-            list(tqdm(executor.map(_download_radar_tile, tasks), total=len(tasks)))
+            list(tqdm(executor.map(_download_radar_tile, tasks), total=len(tasks), disable=_tqdm_disable))
         tiles = sorted(Path(temp_dir).glob('radar-*.png'))
         expected = len(settings.radar_tile_range_x) * len(settings.radar_tile_range_y)
         if len(tiles) != expected:
