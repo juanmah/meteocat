@@ -1,5 +1,6 @@
 import logging
 import sys
+from pathlib import Path
 
 logger = logging.getLogger('meteocat')
 
@@ -20,3 +21,4 @@ def setup(level: int = logging.INFO) -> None:
         logger.addHandler(handler)
     if level <= logging.DEBUG:
         logger.debug('Command: %s', ' '.join(sys.argv))
+        logger.debug('Working directory: %s', Path.cwd())
