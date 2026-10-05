@@ -16,7 +16,7 @@ class WallpaperSettings(BaseModel):
     service_name: str = 'meteocat_wallpaper_generator'
     systemd_user_dir: Path = Path.home() / '.config' / 'systemd' / 'user'
     working_directory: Path = Path.home() / '.local' / 'share' / 'meteocat'
-    service_exec: str = '/usr/bin/uv run meteocat'
+    service_exec: str = f'/usr/bin/uv run --directory {Path(__file__).parent.parent} meteocat'
     service_template: str = (
         '[Unit]\n'
         'Description=meteo.cat wallpaper generator\n'
