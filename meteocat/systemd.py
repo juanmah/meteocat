@@ -59,3 +59,17 @@ def status() -> None:
     if service_result.returncode != 0:
         logger.error('Timer %s.timer is not active', settings.service_name)
         sys.exit(1)
+
+    service_file = settings.systemd_user_dir / f'{settings.service_name}.service'
+    if service_file.exists():
+        logger.info(service_file.read_text())
+
+    service_status = _run(
+        ['systemctl', '--user', 'status', '--no-pager', '-n', '0', f'{settings.service_name}.service']
+    )
+    logger.info(service_status.stdout)
+
+    service_status = _run(
+        ['journalctl', '--user', '-u', f'{settings.service_name}.service', '--since', '6 minutes ago', '--no-pager']
+    )
+    logger.info(service_status.stdout)
