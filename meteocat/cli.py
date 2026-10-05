@@ -15,7 +15,7 @@ def check_dependencies() -> None:
     """Check for required system packages dependencies and give information if any are missing."""
     from meteocat.deps import check_dependencies
 
-    check_dependencies()
+    check_dependencies(verbose=True)
 
 
 @app.command()
