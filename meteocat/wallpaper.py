@@ -52,6 +52,18 @@ def generate_background() -> None:
         img_dark.save(settings.background_4k_dark)
 
 
+def archive_wallpaper(date: str) -> None:
+    year, month, day, hour, minute = date.split('/')
+    timestamp = f'{year}-{month}-{day}_{hour}-{minute}'
+    for suffix, subdir in (('', 'light'), ('_dark', 'dark')):
+        target_dir = settings.wallpaper_history / subdir
+        target_dir.mkdir(parents=True, exist_ok=True)
+        src = settings.wallpaper if suffix == '' else settings.wallpaper_dark
+        dst = target_dir / f'wallpaper{suffix}_{timestamp}.png'
+        dst.write_bytes(src.read_bytes())
+        logger.info(f'Archived {dst}')
+
+
 def generate_wallpaper() -> None:
     check_dependencies()
     if not settings.background_4k.is_file():
@@ -59,9 +71,11 @@ def generate_wallpaper() -> None:
         logger.info('> Generating a background map of Catalonia from meteo.cat sources.')
         generate_background()
 
+    now = datetime.now(UTC) - timedelta(minutes=settings.radar_delay_minutes)
+    date = f'{now.year}/{now.month:02}/{now.day:02}/{now.hour:02}/{now.minute // 6 * 6:02}'
+
     with tempfile.TemporaryDirectory() as temp_dir:
-        now = datetime.now(UTC) - timedelta(minutes=settings.radar_delay_minutes)
-        tasks = [(x, y, temp_dir, now) for x in settings.radar_tile_range_x for y in settings.radar_tile_range_y]
+        tasks = [(x, y, temp_dir, date) for x in settings.radar_tile_range_x for y in settings.radar_tile_range_y]
         with ThreadPoolExecutor(max_workers=settings.max_workers) as executor:
             list(tqdm(executor.map(_download_radar_tile, tasks), total=len(tasks), disable=_tqdm_disable))
         tiles = sorted(Path(temp_dir).glob('radar-*.png'))
@@ -79,3 +93,5 @@ def generate_wallpaper() -> None:
     _set_wallpaper(settings.wallpaper.resolve())
     _set_wallpaper(settings.wallpaper_dark.resolve(), dark=True)
     logger.info('Updated meteo.cat radar background.')
+    if settings.historic_enabled:
+        archive_wallpaper(date)

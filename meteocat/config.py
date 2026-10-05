@@ -47,6 +47,8 @@ class WallpaperSettings(BaseModel):
     radar: Path = Path('radar.png')
     wallpaper: Path = Path('wallpaper/wallpaper.png')
     wallpaper_dark: Path = Path('wallpaper/wallpaper_dark.png')
+    wallpaper_history: Path = Path('history')
+    historic_enabled: bool = False
 
     background_tile_range_x: range = range(510, 528)
     background_tile_range_y: range = range(638, 648)

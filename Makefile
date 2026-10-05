@@ -38,4 +38,5 @@ edit-user-config: ## Edit the user config.yaml (~/.local/share/meteocat/config.y
 
 clean: ## Remove output and background files
 	@rm -rf background
+	@rm -rf history
 	@rm -rf wallpaper

@@ -1,4 +1,3 @@
-from datetime import datetime
 from pathlib import Path
 from random import uniform
 from time import sleep
@@ -48,9 +47,8 @@ def _download_background_tile(args: tuple[int, int, str]) -> None:
     _download_tile(url, dest)
 
 
-def _download_radar_tile(args: tuple[int, int, str, datetime]) -> None:
-    x, y, temp_dir, now = args
-    date = f'{now.year}/{now.month:02}/{now.day:02}/{now.hour:02}/{now.minute // 6 * 6:02}'
+def _download_radar_tile(args: tuple[int, int, str, str]) -> None:
+    x, y, temp_dir, date = args
     url = f'https://static-m.meteo.cat/tiles/radar/{date}/07/000/000/0{x}/000/000/0{y}.png'
     dest = Path(temp_dir) / f'radar-{-(y - settings.radar_offset_y)}-{(x - settings.radar_offset_x)}.png'
     _download_tile(url, dest)
