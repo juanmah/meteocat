@@ -1,12 +1,8 @@
-import logging
 import subprocess  # ruff: ignore[suspicious-subprocess-import] # nosec B404
 import sys
 
 from meteocat.config import settings
-from meteocat.logging import setup
-
-setup()
-logger = logging.getLogger('meteocat')
+from meteocat.logging import logger
 
 
 def _run(args: list[str]) -> subprocess.CompletedProcess[str]:

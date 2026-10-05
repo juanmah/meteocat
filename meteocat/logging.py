@@ -6,6 +6,8 @@ logger = logging.getLogger('meteocat')
 
 def setup() -> None:
     logger.setLevel(logging.INFO)
+    if logger.handlers:
+        return
     if sys.stderr.isatty():
         from rich.logging import RichHandler
 
@@ -16,3 +18,6 @@ def setup() -> None:
         handler = logging.StreamHandler()
         handler.setFormatter(logging.Formatter('%(message)s'))
         logger.addHandler(handler)
+
+
+setup()

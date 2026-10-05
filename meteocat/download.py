@@ -1,5 +1,4 @@
 from datetime import datetime
-from logging import getLogger
 from pathlib import Path
 from random import uniform
 from time import sleep
@@ -7,10 +6,7 @@ from time import sleep
 import requests
 
 from meteocat.config import settings
-from meteocat.logging import setup
-
-setup()
-logger = getLogger('meteocat')
+from meteocat.logging import logger
 
 
 def _download_tile(url: str, dest: Path) -> None:

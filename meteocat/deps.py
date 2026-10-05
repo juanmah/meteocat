@@ -1,10 +1,6 @@
-import logging
 from shutil import which
 
-from meteocat.logging import setup
-
-logger = logging.getLogger('meteocat')
-setup()
+from meteocat.logging import logger
 
 
 def check_dependencies(*, verbose: bool = False) -> None:
