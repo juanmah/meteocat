@@ -36,7 +36,7 @@ def _cron_entry(uid: str) -> str:
         f'{METEOCAT_MARKER}\n'
         f'{settings.cron_schedule} {dbus_prefix}'
         f'cd {settings.working_directory} && '
-        f'{settings.service_exec} generate-wallpaper '
+        f'{settings.service_exec} wallpaper '
         f'>> {settings.working_directory}/cron.log 2>&1\n'
     )
 

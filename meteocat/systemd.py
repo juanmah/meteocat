@@ -11,7 +11,7 @@ SERVICE_TEMPLATE = (
     '[Service]\n'
     'Type=oneshot\n'
     'WorkingDirectory={{WORKING_DIRECTORY}}\n'
-    'ExecStart={{SERVICE_EXEC}} generate-wallpaper\n'
+    'ExecStart={{SERVICE_EXEC}} wallpaper\n'
     '\n'
     '[Install]\n'
     'WantedBy=graphical-session.target\n'

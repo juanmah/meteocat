@@ -3,9 +3,20 @@ from enum import StrEnum
 
 import typer
 import yaml
+from typer.core import TyperGroup
 
 from meteocat.config import settings
 from meteocat.logging import logger, setup
+
+
+class _OrderedTyperGroup(TyperGroup):
+    def list_commands(self, ctx: typer.Context) -> list[str]:
+        cmds = super().list_commands(ctx)
+        if 'scheduler' in cmds:
+            cmds.remove('scheduler')
+            idx = next((i for i, c in enumerate(cmds) if c == 'dependencies'), len(cmds))
+            cmds.insert(idx, 'scheduler')
+        return cmds
 
 
 class Scheduler(StrEnum):
@@ -28,7 +39,7 @@ class DesktopEnvironment(StrEnum):
     NONE = 'none'
 
 
-app = typer.Typer(help='Set the desktop wallpaper by fetching radar images from meteo.cat.')
+app = typer.Typer(help='Set the desktop wallpaper by fetching radar images from meteo.cat.', cls=_OrderedTyperGroup)
 
 
 @app.callback(invoke_without_command=True)
@@ -41,7 +52,7 @@ def main(ctx: typer.Context) -> None:
 
 
 @app.command()
-def generate_background() -> None:
+def background() -> None:
     """Generate the background map of Catalonia from meteo.cat sources, and adapt it to 4K."""
     from meteocat.wallpaper import generate_background
 
@@ -49,7 +60,7 @@ def generate_background() -> None:
 
 
 @app.command()
-def generate_wallpaper() -> None:
+def wallpaper() -> None:
     """Generate a wallpaper with an updated meteo.cat radar map."""
     from meteocat.wallpaper import generate_wallpaper
 
@@ -60,7 +71,7 @@ _DE_SET_ARGUMENT = typer.Argument(DesktopEnvironment.AUTO, help='Desktop environ
 
 
 @app.command()
-def set_de(
+def desktop_environment(
     desktop_environment: DesktopEnvironment = _DE_SET_ARGUMENT,
 ) -> None:
     """Set the desktop environment."""
@@ -71,11 +82,20 @@ def set_de(
     typer.echo(f'Desktop environment set to: {desktop_environment}')
 
 
+scheduler_app = typer.Typer(help='Manage the scheduler.')
+
 _SCHEDULER_ARGUMENT = typer.Argument(..., help='Scheduler to use.')
 
 
-@app.command()
-def install_scheduler(
+@scheduler_app.callback(invoke_without_command=True)
+def _scheduler_main(ctx: typer.Context) -> None:
+    if ctx.invoked_subcommand is None:
+        typer.echo(ctx.get_help())
+        raise typer.Exit
+
+
+@scheduler_app.command('install')
+def _install_scheduler(
     scheduler: Scheduler = _SCHEDULER_ARGUMENT,
 ) -> None:
     """Install the scheduler (systemd or cron)."""
@@ -88,16 +108,16 @@ def install_scheduler(
     _install()
 
 
-@app.command()
-def uninstall_scheduler() -> None:
+@scheduler_app.command('uninstall')
+def _uninstall_scheduler() -> None:
     """Uninstall the scheduler (systemd and cron)."""
     from meteocat.scheduler import uninstall as _uninstall
 
     _uninstall()
 
 
-@app.command()
-def scheduler_status() -> None:
+@scheduler_app.command('status')
+def _status_scheduler() -> None:
     """Show the scheduler status."""
     from meteocat.scheduler import status as _status
 
@@ -105,7 +125,7 @@ def scheduler_status() -> None:
 
 
 @app.command()
-def check_dependencies() -> None:
+def dependencies() -> None:
     """Check for required system packages dependencies."""
     from meteocat.deps import check_dependencies
 
@@ -132,3 +152,6 @@ def set_config(
     setattr(settings, field, yaml.safe_load(value))
     _save(field)
     logger.info(f'[bold]{field}[/bold] set to [bold]{getattr(settings, field)}[/bold]')
+
+
+app.add_typer(scheduler_app, name='scheduler')
