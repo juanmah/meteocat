@@ -55,17 +55,11 @@ def generate_background() -> None:
     generate_background()
 
 
-_DE_OPTION = typer.Option('--desktop-environment', help='Desktop environment to use.')
-
-
 @app.command()
-def generate_wallpaper(
-    desktop_environment: DesktopEnvironment = _DE_OPTION,
-) -> None:
+def generate_wallpaper() -> None:
     """Generate a wallpaper with an updated meteo.cat radar map."""
     from meteocat.wallpaper import generate_wallpaper
 
-    settings.desktop_environment = desktop_environment
     generate_wallpaper()
 
 
