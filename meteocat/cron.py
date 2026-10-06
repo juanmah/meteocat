@@ -1,6 +1,8 @@
+import os
 import re
 import subprocess  # ruff: ignore[suspicious-subprocess-import] # nosec B404
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
 from meteocat.config import settings
 from meteocat.logging import logger
@@ -24,10 +26,15 @@ def _write_crontab(content: str) -> None:
     _run(['crontab', '-'], stdin_data=content)
 
 
+def _has_dbus() -> bool:
+    return Path(f'/run/user/{os.getuid()}/bus').exists()
+
+
 def _cron_entry(uid: str) -> str:
+    dbus_prefix = f'export DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/{uid}/bus && ' if _has_dbus() else ''
     return (
         f'{METEOCAT_MARKER}\n'
-        f'{settings.cron_schedule} export DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/{uid}/bus && '
+        f'{settings.cron_schedule} {dbus_prefix}'
         f'cd {settings.working_directory} && '
         f'{settings.service_exec} generate-wallpaper '
         f'>> {settings.working_directory}/cron.log 2>&1\n'
@@ -36,8 +43,6 @@ def _cron_entry(uid: str) -> str:
 
 def install() -> None:
     settings.working_directory.mkdir(parents=True, exist_ok=True)
-
-    import os
 
     uid = str(os.getuid())
 
