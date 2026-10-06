@@ -41,14 +41,6 @@ def main(ctx: typer.Context) -> None:
 
 
 @app.command()
-def check_dependencies() -> None:
-    """Check for required system packages dependencies and give information if any are missing."""
-    from meteocat.deps import check_dependencies
-
-    check_dependencies(verbose=True)
-
-
-@app.command()
 def generate_background() -> None:
     """Generate the background map of Catalonia from meteo.cat sources, and adapt it to 4K."""
     from meteocat.wallpaper import generate_background
@@ -71,12 +63,53 @@ _DE_SET_ARGUMENT = typer.Argument(DesktopEnvironment.AUTO, help='Desktop environ
 def set_de(
     desktop_environment: DesktopEnvironment = _DE_SET_ARGUMENT,
 ) -> None:
-    """Set the desktop environment in the config."""
+    """Set the desktop environment."""
     settings.desktop_environment = desktop_environment
     from meteocat.config import save_config
 
     save_config('desktop_environment')
     typer.echo(f'Desktop environment set to: {desktop_environment}')
+
+
+_SCHEDULER_ARGUMENT = typer.Argument(..., help='Scheduler to use.')
+
+
+@app.command()
+def install_scheduler(
+    scheduler: Scheduler = _SCHEDULER_ARGUMENT,
+) -> None:
+    """Install the scheduler (systemd or cron)."""
+    from meteocat.scheduler import install as _install
+
+    settings.scheduler = scheduler
+    from meteocat.config import save_config as _save
+
+    _save('scheduler')
+    _install()
+
+
+@app.command()
+def uninstall_scheduler() -> None:
+    """Uninstall the scheduler (systemd and cron)."""
+    from meteocat.scheduler import uninstall as _uninstall
+
+    _uninstall()
+
+
+@app.command()
+def scheduler_status() -> None:
+    """Show the scheduler status."""
+    from meteocat.scheduler import status as _status
+
+    _status()
+
+
+@app.command()
+def check_dependencies() -> None:
+    """Check for required system packages dependencies."""
+    from meteocat.deps import check_dependencies
+
+    check_dependencies(verbose=True)
 
 
 @app.command(hidden=True)
@@ -99,36 +132,3 @@ def set_config(
     setattr(settings, field, yaml.safe_load(value))
     _save(field)
     logger.info(f'[bold]{field}[/bold] set to [bold]{getattr(settings, field)}[/bold]')
-
-
-_SCHEDULER_ARGUMENT = typer.Argument(..., help='Scheduler to use.')
-
-
-@app.command()
-def install_scheduler(
-    scheduler: Scheduler = _SCHEDULER_ARGUMENT,
-) -> None:
-    """Install the scheduler (systemd or cron) for the wallpaper generator."""
-    from meteocat.scheduler import install as _install
-
-    settings.scheduler = scheduler
-    from meteocat.config import save_config as _save
-
-    _save('scheduler')
-    _install()
-
-
-@app.command()
-def uninstall_scheduler() -> None:
-    """Uninstall the scheduler (systemd and cron) for the wallpaper generator."""
-    from meteocat.scheduler import uninstall as _uninstall
-
-    _uninstall()
-
-
-@app.command()
-def scheduler_status() -> None:
-    """Show the scheduler status."""
-    from meteocat.scheduler import status as _status
-
-    _status()
