@@ -19,6 +19,7 @@ class WallpaperSettings(BaseModel):
     service_exec: str = f'/usr/bin/uv run --project {Path(__file__).parent.parent} meteocat'
 
     scheduler: str = 'auto'
+    desktop_environment: str = 'auto'
     cron_schedule: str = '*/6 * * * *'
 
     background_raw: Path = Path('background/background_raw.png')
@@ -76,6 +77,12 @@ def _load_yaml(path: Path) -> dict[str, object] | None:
 def _apply_overrides(base: WallpaperSettings, overrides: dict[str, object]) -> WallpaperSettings:
     field_names = set(base.model_fields.keys())
     filtered = {k: v for k, v in overrides.items() if k in field_names}
+    for key, val in filtered.items():
+        ann = base.model_fields[key].annotation
+        if ann is range and isinstance(val, list):
+            filtered[key] = range(val[0], val[-1] + 1) if val else range(0)
+        elif ann is tuple and isinstance(val, list):
+            filtered[key] = tuple(val)
     if not filtered:
         return base
     return WallpaperSettings(**{**base.model_dump(), **filtered})
@@ -92,3 +99,26 @@ def _load_config() -> WallpaperSettings:
 
 
 settings = _load_config()
+
+
+def _serialize_value(v: object) -> object:
+    if isinstance(v, Path):
+        return str(v)
+    if isinstance(v, range):
+        return list(v)
+    if isinstance(v, tuple):
+        return list(v)
+    if hasattr(v, 'value'):
+        return v.value
+    return v
+
+
+def save_config(field: str | None = None) -> None:
+    paths = ConfigPaths()
+    paths.user.parent.mkdir(parents=True, exist_ok=True)
+    existing = _load_yaml(paths.user) or {}
+    if field is not None:
+        existing[field] = _serialize_value(getattr(settings, field))
+    else:
+        existing = {k: _serialize_value(v) for k, v in settings.model_dump().items()}
+    paths.user.write_text(yaml.dump(existing, default_flow_style=False, sort_keys=False))

@@ -13,6 +13,20 @@ class Scheduler(StrEnum):
     CRON = 'cron'
 
 
+class DesktopEnvironment(StrEnum):
+    AUTO = 'auto'
+    GNOME = 'gnome'
+    CINNAMON = 'cinnamon'
+    MATE = 'mate'
+    KDE = 'kde'
+    XFCE = 'xfce'
+    LXQT = 'lxqt'
+    SWAY = 'sway'
+    HYPRLAND = 'hyprland'
+    I3 = 'i3'
+    NONE = 'none'
+
+
 app = typer.Typer(help='Set the desktop wallpaper by fetching radar images from meteo.cat.')
 
 
@@ -41,12 +55,42 @@ def generate_background() -> None:
     generate_background()
 
 
+_DE_OPTION = typer.Option('--desktop-environment', help='Desktop environment to use.')
+
+
 @app.command()
-def generate_wallpaper() -> None:
+def generate_wallpaper(
+    desktop_environment: DesktopEnvironment = _DE_OPTION,
+) -> None:
     """Generate a wallpaper with an updated meteo.cat radar map."""
     from meteocat.wallpaper import generate_wallpaper
 
+    settings.desktop_environment = desktop_environment
     generate_wallpaper()
+
+
+_DE_SET_ARGUMENT = typer.Argument(DesktopEnvironment.AUTO, help='Desktop environment to set.')
+
+
+@app.command()
+def set_de(
+    desktop_environment: DesktopEnvironment = _DE_SET_ARGUMENT,
+) -> None:
+    """Set the desktop environment in the config."""
+    settings.desktop_environment = desktop_environment
+    from meteocat.config import save_config
+
+    save_config('desktop_environment')
+    typer.echo(f'Desktop environment set to: {desktop_environment}')
+
+
+@app.command(hidden=True)
+def save_config() -> None:
+    """Save the current config to the user config file."""
+    from meteocat.config import save_config as _save
+
+    _save()
+    typer.echo('Config saved.')
 
 
 _SCHEDULER_OPTION = typer.Option('--scheduler', help='Scheduler to use.')

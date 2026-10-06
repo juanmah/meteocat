@@ -1,8 +1,10 @@
+import os
 import sys
 import tempfile
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from shutil import which
 
 from tqdm import tqdm
 
@@ -15,7 +17,74 @@ from meteocat.logging import logger
 _tqdm_disable = not sys.stderr.isatty()
 
 
-def _set_wallpaper(path: Path, *, dark: bool = False) -> None:
+_XDG_TOKEN_MAP: dict[str, str] = {
+    'GNOME': 'gnome',
+    'Cinnamon': 'cinnamon',
+    'MATE': 'mate',
+    'KDE': 'kde',
+    'Plasma': 'kde',
+    'XFCE': 'xfce',
+    'LXQt': 'lxqt',
+}
+
+_XDG_SESSION_TOKEN_MAP: dict[str, str] = {
+    'gnome': 'gnome',
+    'cinnamon': 'cinnamon',
+    'mate': 'mate',
+    'kde': 'kde',
+    'xfce': 'xfce',
+    'lxqt': 'lxqt',
+    'sway': 'sway',
+    'hyprland': 'hyprland',
+    'i3': 'i3',
+}
+
+_DESKTOP_SESSION_TOKEN_MAP: dict[str, str] = {
+    'gnome': 'gnome',
+    'cinnamon': 'cinnamon',
+    'mate': 'mate',
+    'kde': 'kde',
+    'xfce': 'xfce',
+    'lxqt': 'lxqt',
+}
+
+_FALLBACK_DETECTORS: list[tuple[str, str]] = [
+    ('plasmashell', 'kde'),
+    ('xfce4-session', 'xfce'),
+    ('swaymsg', 'sway'),
+    ('hyprctl', 'hyprland'),
+    ('i3', 'i3'),
+    ('i3-gaps', 'i3'),
+]
+
+
+def _match_env_var(env_name: str, token_map: dict[str, str]) -> str | None:
+    value = os.environ.get(env_name, '')
+    if not value:
+        return None
+    for token, de in token_map.items():
+        if token in value:
+            return de
+    return None
+
+
+def _detect_de() -> str:
+    result = _match_env_var('XDG_CURRENT_DESKTOP', _XDG_TOKEN_MAP)
+    if result:
+        return result
+    result = _match_env_var('XDG_SESSION_DESKTOP', _XDG_SESSION_TOKEN_MAP)
+    if result:
+        return result
+    result = _match_env_var('DESKTOP_SESSION', _DESKTOP_SESSION_TOKEN_MAP)
+    if result:
+        return result
+    for prog, de in _FALLBACK_DETECTORS:
+        if which(prog) is not None:
+            return de
+    return 'none'
+
+
+def _set_gnome(path: Path, *, dark: bool = False) -> None:
     import gi
 
     gi.require_version('Gio', '2.0')
@@ -24,6 +93,128 @@ def _set_wallpaper(path: Path, *, dark: bool = False) -> None:
     key = 'picture-uri-dark' if dark else 'picture-uri'
     gsettings = Gio.Settings.new('org.gnome.desktop.background')
     gsettings.set_string(key, f'file://{path}')
+
+
+def _set_cinnamon(path: Path, *, dark: bool = False) -> None:
+    import gi
+
+    gi.require_version('Gio', '2.0')
+    from gi.repository import Gio
+
+    key = 'picture-uri-dark' if dark else 'picture-uri'
+    gsettings = Gio.Settings.new('org.cinnamon.desktop.background')
+    gsettings.set_string(key, f'file://{path}')
+
+
+def _set_mate(path: Path, *, _dark: bool = False) -> None:
+    import gi
+
+    gi.require_version('Gio', '2.0')
+    from gi.repository import Gio
+
+    gsettings = Gio.Settings.new('org.mate.background')
+    gsettings.set_string('picture-filename', f'file://{path}')
+
+
+def _set_kde(path: Path, *, _dark: bool = False) -> None:
+    import subprocess  # ruff: ignore[suspicious-subprocess-import] # nosec B404
+
+    qdbus = which('qdbus')
+    script = (
+        'var allDesktops = desktops();\n'
+        'for (i=0; i<allDesktops.length; i++) {\n'
+        '  d = allDesktops[i];\n'
+        '  d.wallpaperPlugin = "org.kde.image";\n'
+        '  d.currentConfigGroup = Array("Wallpaper", "org.kde.image", "General");\n'
+        '  d.writeConfig("image", "file://' + str(path) + '");\n'
+        '}\n'
+    )
+    subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true] # nosec B603
+        [qdbus, 'org.kde.plasmashell', '/PlasmaShell', 'evaluateScript', script],
+        check=True,
+    )
+
+
+def _set_xfce(path: Path, *, _dark: bool = False) -> None:
+    import subprocess  # ruff: ignore[suspicious-subprocess-import] # nosec B404
+
+    backdrop = '/backdrop/screen0/monitor0/image-path'
+    xfconf = which('xfconf-query')
+    subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true] # nosec B603
+        [xfconf, '-c', 'xfce4-desktop', '-p', backdrop, '-s', str(path)],
+        check=True,
+    )
+
+
+def _set_lxqt(path: Path, *, _dark: bool = False) -> None:
+    import subprocess  # ruff: ignore[suspicious-subprocess-import] # nosec B404
+
+    pcmanfm = which('pcmanfm')
+    subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true] # nosec B603
+        [pcmanfm, '--set-wallpaper', str(path)],
+        check=True,
+    )
+
+
+def _set_sway(path: Path, *, _dark: bool = False) -> None:
+    import subprocess  # ruff: ignore[suspicious-subprocess-import] # nosec B404
+
+    swaymsg = which('swaymsg')
+    subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true] # nosec B603
+        [swaymsg, 'output', '*', 'bg', str(path), 'fill'],
+        check=True,
+    )
+
+
+def _set_hyprland(path: Path, *, _dark: bool = False) -> None:
+    import subprocess  # ruff: ignore[suspicious-subprocess-import] # nosec B404
+
+    hyprctl = which('hyprctl')
+    subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true] # nosec B603
+        [hyprctl, 'hyprpaper', 'wallpaper', ','.join(['*', str(path)])],
+        check=True,
+    )
+
+
+def _set_i3(path: Path, *, _dark: bool = False) -> None:
+    import subprocess  # ruff: ignore[suspicious-subprocess-import] # nosec B404
+
+    feh = which('feh')
+    subprocess.run(  # ruff: ignore[subprocess-without-shell-equals-true] # nosec B603
+        [feh, '--bg-scale', str(path)],
+        check=True,
+    )
+
+
+_SETTERS: dict[str, callable] = {
+    'gnome': _set_gnome,
+    'cinnamon': _set_cinnamon,
+    'mate': _set_mate,
+    'kde': _set_kde,
+    'xfce': _set_xfce,
+    'lxqt': _set_lxqt,
+    'sway': _set_sway,
+    'hyprland': _set_hyprland,
+    'i3': _set_i3,
+}
+
+
+def _resolve_de() -> str:
+    de = settings.desktop_environment
+    if de in _SETTERS or de == 'none':
+        return de
+    return _detect_de()
+
+
+def _set_wallpaper(path: Path, *, dark: bool = False) -> None:
+    de = _resolve_de()
+    if de == 'none':
+        return
+    setter = _SETTERS.get(de)
+    if setter is None:
+        logger.warning(f'No wallpaper setter for DE: {de}')
+        return
+    setter(path, dark=dark)
 
 
 def generate_background() -> None:
