@@ -17,29 +17,9 @@ class WallpaperSettings(BaseModel):
     systemd_user_dir: Path = Path.home() / '.config' / 'systemd' / 'user'
     working_directory: Path = Path.home() / '.local' / 'share' / 'meteocat'
     service_exec: str = f'/usr/bin/uv run --project {Path(__file__).parent.parent} meteocat'
-    service_template: str = (
-        '[Unit]\n'
-        'Description=meteo.cat wallpaper generator\n'
-        '\n'
-        '[Service]\n'
-        'Type=oneshot\n'
-        'WorkingDirectory={{WORKING_DIRECTORY}}\n'
-        'ExecStart={{SERVICE_EXEC}} generate-wallpaper\n'
-        '\n'
-        '[Install]\n'
-        'WantedBy=graphical-session.target\n'
-    )
-    timer_template: str = (
-        '[Unit]\n'
-        'Description=Meteocat Wallpaper Generator Timer\n'
-        '\n'
-        '[Timer]\n'
-        'OnCalendar=*:0/6\n'
-        'Persistent=true\n'
-        '\n'
-        '[Install]\n'
-        'WantedBy=timers.target\n'
-    )
+
+    scheduler: str = 'auto'
+    cron_schedule: str = '*/6 * * * *'
 
     background_raw: Path = Path('background/background_raw.png')
     background_4k: Path = Path('background/background_4K.png')

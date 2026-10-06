@@ -4,6 +4,31 @@ import sys
 from meteocat.config import settings
 from meteocat.logging import logger
 
+SERVICE_TEMPLATE = (
+    '[Unit]\n'
+    'Description=meteo.cat wallpaper generator\n'
+    '\n'
+    '[Service]\n'
+    'Type=oneshot\n'
+    'WorkingDirectory={{WORKING_DIRECTORY}}\n'
+    'ExecStart={{SERVICE_EXEC}} generate-wallpaper\n'
+    '\n'
+    '[Install]\n'
+    'WantedBy=graphical-session.target\n'
+)
+
+TIMER_TEMPLATE = (
+    '[Unit]\n'
+    'Description=Meteocat Wallpaper Generator Timer\n'
+    '\n'
+    '[Timer]\n'
+    'OnCalendar=*:0/6\n'
+    'Persistent=true\n'
+    '\n'
+    '[Install]\n'
+    'WantedBy=timers.target\n'
+)
+
 
 def _run(args: list[str]) -> subprocess.CompletedProcess[str]:
     return subprocess.run(args, capture_output=True, text=True)  # ruff: ignore[subprocess-without-shell-equals-true] # nosec B603
@@ -16,11 +41,11 @@ def install() -> None:
     service_dst = settings.systemd_user_dir / f'{settings.service_name}.service'
     timer_dst = settings.systemd_user_dir / f'{settings.service_name}.timer'
 
-    service_text = settings.service_template.replace('{{WORKING_DIRECTORY}}', str(settings.working_directory)).replace(
+    service_text = SERVICE_TEMPLATE.replace('{{WORKING_DIRECTORY}}', str(settings.working_directory)).replace(
         '{{SERVICE_EXEC}}', settings.service_exec
     )
     service_dst.write_text(service_text)
-    timer_dst.write_text(settings.timer_template)
+    timer_dst.write_text(TIMER_TEMPLATE)
 
     _run(['systemctl', '--user', 'daemon-reload'])
     _run(['systemctl', '--user', 'enable', f'{settings.service_name}.timer'])

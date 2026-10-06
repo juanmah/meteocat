@@ -1,9 +1,17 @@
 import logging
+from enum import StrEnum
 
 import typer
 
 from meteocat.config import settings
 from meteocat.logging import setup
+
+
+class Scheduler(StrEnum):
+    AUTO = 'auto'
+    SYSTEMD = 'systemd'
+    CRON = 'cron'
+
 
 app = typer.Typer(help='Set the desktop wallpaper by fetching radar images from meteo.cat.')
 
@@ -41,25 +49,31 @@ def generate_wallpaper() -> None:
     generate_wallpaper()
 
 
-@app.command()
-def install_systemd() -> None:
-    """Install the systemd user service and timer."""
-    from meteocat.systemd import install
-
-    install()
+_SCHEDULER_OPTION = typer.Option('--scheduler', help='Scheduler to use.')
 
 
 @app.command()
-def uninstall_systemd() -> None:
-    """Uninstall the systemd user service and timer."""
-    from meteocat.systemd import uninstall
+def install_scheduler(
+    scheduler: Scheduler = _SCHEDULER_OPTION,
+) -> None:
+    """Install the scheduler (systemd or cron) for the wallpaper generator."""
+    from meteocat.scheduler import install as _install
 
-    uninstall()
+    settings.scheduler = scheduler
+    _install()
 
 
 @app.command()
-def status_systemd() -> None:
-    """Show the systemd timer status."""
-    from meteocat.systemd import status as _status
+def uninstall_scheduler() -> None:
+    """Uninstall the scheduler (systemd and cron) for the wallpaper generator."""
+    from meteocat.scheduler import uninstall as _uninstall
+
+    _uninstall()
+
+
+@app.command()
+def scheduler_status() -> None:
+    """Show the scheduler status."""
+    from meteocat.scheduler import status as _status
 
     _status()
