@@ -101,12 +101,12 @@ def set_config(
     logger.info(f'[bold]{field}[/bold] set to [bold]{getattr(settings, field)}[/bold]')
 
 
-_SCHEDULER_OPTION = typer.Option('--scheduler', help='Scheduler to use.')
+_SCHEDULER_ARGUMENT = typer.Argument(..., help='Scheduler to use.')
 
 
 @app.command()
 def install_scheduler(
-    scheduler: Scheduler = _SCHEDULER_OPTION,
+    scheduler: Scheduler = _SCHEDULER_ARGUMENT,
 ) -> None:
     """Install the scheduler (systemd or cron) for the wallpaper generator."""
     from meteocat.scheduler import install as _install
