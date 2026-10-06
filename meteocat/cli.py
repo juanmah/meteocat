@@ -104,6 +104,9 @@ def install_scheduler(
     from meteocat.scheduler import install as _install
 
     settings.scheduler = scheduler
+    from meteocat.config import save_config as _save
+
+    _save('scheduler')
     _install()
 
 
