@@ -2,9 +2,10 @@ import logging
 from enum import StrEnum
 
 import typer
+import yaml
 
 from meteocat.config import settings
-from meteocat.logging import setup
+from meteocat.logging import logger, setup
 
 
 class Scheduler(StrEnum):
@@ -85,6 +86,19 @@ def save_config() -> None:
 
     _save()
     typer.echo('Config saved.')
+
+
+@app.command(hidden=True)
+def set_config(
+    field: str = typer.Argument(..., help='Config field name.'),
+    value: str = typer.Argument(..., help='Config field value.'),
+) -> None:
+    """Set a config field and save."""
+    from meteocat.config import save_config as _save
+
+    setattr(settings, field, yaml.safe_load(value))
+    _save(field)
+    logger.info(f'[bold]{field}[/bold] set to [bold]{getattr(settings, field)}[/bold]')
 
 
 _SCHEDULER_OPTION = typer.Option('--scheduler', help='Scheduler to use.')
