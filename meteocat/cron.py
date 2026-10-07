@@ -5,7 +5,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from meteocat.config import settings
-from meteocat.logging import logger
+from meteocat.logger import logger
 
 METEOCAT_MARKER = '# meteocat'
 _LOG_TIMESTAMP_RE = re.compile(r'^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})')

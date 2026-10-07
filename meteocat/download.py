@@ -5,7 +5,7 @@ from time import sleep
 import requests
 
 from meteocat.config import settings
-from meteocat.logging import logger
+from meteocat.logger import logger
 
 
 def _download_tile(url: str, dest: Path) -> None:

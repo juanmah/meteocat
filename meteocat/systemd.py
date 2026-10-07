@@ -2,7 +2,7 @@ import subprocess  # ruff: ignore[suspicious-subprocess-import] # nosec B404
 import sys
 
 from meteocat.config import settings
-from meteocat.logging import logger
+from meteocat.logger import logger
 
 SERVICE_TEMPLATE = (
     '[Unit]\n'

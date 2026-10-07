@@ -6,7 +6,7 @@ import yaml
 from typer.core import TyperGroup
 
 from meteocat.config import settings
-from meteocat.logging import logger, setup
+from meteocat.logger import logger, setup
 
 
 class _OrderedTyperGroup(TyperGroup):

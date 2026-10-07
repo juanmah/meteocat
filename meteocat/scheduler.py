@@ -3,7 +3,7 @@ import subprocess  # ruff: ignore[suspicious-subprocess-import] # nosec B404
 from shutil import which
 
 from meteocat.config import settings
-from meteocat.logging import logger
+from meteocat.logger import logger
 
 
 def _systemd_available() -> bool:

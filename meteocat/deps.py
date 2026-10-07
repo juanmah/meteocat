@@ -1,7 +1,7 @@
 from pathlib import Path
 from shutil import which
 
-from meteocat.logging import logger
+from meteocat.logger import logger
 
 _BINARY_TO_PACKAGE: dict[str, dict[str, str]] = {
     'gsettings': {'arch': 'glib2', 'debian': 'libglib2.0-bin', 'ubuntu': 'libglib2.0-bin'},
