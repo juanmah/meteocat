@@ -217,8 +217,9 @@ def _set_wallpaper(path: Path, *, dark: bool = False) -> None:
     setter(path, dark=dark)
 
 
-def generate_background() -> None:
-    check_dependencies()
+def generate_background(*, check_deps: bool = True) -> None:
+    if check_deps:
+        check_dependencies()
 
     with tempfile.TemporaryDirectory() as temp_dir:
         tasks = [(x, y, temp_dir) for x in settings.background_tile_range_x for y in settings.background_tile_range_y]
@@ -255,12 +256,13 @@ def archive_wallpaper(date: str) -> None:
         logger.info(f'Archived {dst}')
 
 
-def generate_wallpaper() -> None:
-    check_dependencies()
+def generate_wallpaper(*, check_deps: bool = True) -> None:
+    if check_deps:
+        check_dependencies()
     if not settings.background_4k.is_file():
         logger.info("> Background doesn't exist.")
         logger.info('> Generating a background map of Catalonia from meteo.cat sources.')
-        generate_background()
+        generate_background(check_deps=check_deps)
 
     now = datetime.now(UTC) - timedelta(minutes=settings.radar_delay_minutes)
     date = f'{now.year}/{now.month:02}/{now.day:02}/{now.hour:02}/{now.minute // 6 * 6:02}'
