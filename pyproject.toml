@@ -19,6 +19,7 @@ dependencies = [
     "pillow>=12.3.0",
     "pygobject>=3.58.0",
     "pyyaml>=6.0",
+    "ffmpeg-python",
 ]
 
 [dependency-groups]

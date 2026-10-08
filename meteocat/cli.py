@@ -1,4 +1,5 @@
 import logging
+from datetime import UTC, datetime
 from enum import StrEnum
 
 import typer
@@ -152,6 +153,29 @@ def set_config(
     setattr(settings, field, yaml.safe_load(value))
     _save(field)
     logger.info(f'[bold]{field}[/bold] set to [bold]{getattr(settings, field)}[/bold]')
+
+
+@app.command()
+def video(
+    from_: str = typer.Argument(
+        lambda: datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0).isoformat(),
+        help='Start datetime (ISO format, e.g. 2027-01-01T00:00).',
+    ),
+    to: str = typer.Argument(
+        lambda: datetime.now(UTC).isoformat(),
+        help='End datetime (ISO format, e.g. 2027-01-02T00:00).',
+    ),
+    profile: str = typer.Option('mkv', help='Video profile name from config.'),
+    *,
+    dark: bool = True,
+    light: bool = True,
+) -> None:
+    """Generate a video from historical wallpaper frames."""
+    from meteocat.video import create_video
+
+    from_dt = datetime.fromisoformat(from_)
+    to_dt = datetime.fromisoformat(to)
+    create_video(from_dt, to_dt, profile_name=profile, light=light, dark=dark)
 
 
 app.add_typer(scheduler_app, name='scheduler')

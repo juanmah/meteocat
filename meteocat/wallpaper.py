@@ -8,7 +8,7 @@ from shutil import move, which
 
 from tqdm import tqdm
 
-from meteocat.config import settings
+from meteocat.config import _HISTORY_DIR, settings
 from meteocat.deps import check_dependencies
 from meteocat.download import _download_background_tile, _download_radar_tile
 from meteocat.image import _apply_background_overlays, _assemble_tiles, _composite_radar, _make_dark_variant
@@ -23,7 +23,6 @@ _BACKGROUND_4K_DARK = Path('background/background_4K_dark.png')
 _RADAR = Path('radar.png')
 _WALLPAPER = Path('wallpaper/wallpaper.png')
 _WALLPAPER_DARK = Path('wallpaper/wallpaper_dark.png')
-_WALLPAPER_HISTORY = Path('history')
 
 _BACKGROUND_TILE_RANGE_X = range(510, 528)
 _BACKGROUND_TILE_RANGE_Y = range(638, 648)
@@ -291,7 +290,7 @@ def archive_wallpaper(date: str, *, move_files: bool = False) -> None:
     year, month, day, hour, minute = date.split('/')
     timestamp = f'{year}-{month}-{day}_{hour}-{minute}'
     for suffix, subdir in (('', 'light'), ('_dark', 'dark')):
-        target_dir = _WALLPAPER_HISTORY / subdir
+        target_dir = _HISTORY_DIR / subdir
         target_dir.mkdir(parents=True, exist_ok=True)
         src = _WALLPAPER if suffix == '' else _WALLPAPER_DARK
         dst = target_dir / f'wallpaper{suffix}_{timestamp}.png'

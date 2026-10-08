@@ -3,11 +3,35 @@ from pathlib import Path
 import yaml
 from pydantic import BaseModel
 
+_HISTORY_DIR = Path('history')
+
 
 class ConfigPaths(BaseModel):
     package: Path = Path(__file__).parent / 'config.yaml'
     system: Path = Path('/etc/meteocat/config.yaml')
     user: Path = Path.home() / '.local' / 'share' / 'meteocat' / 'config.yaml'
+
+
+class VideoProfile(BaseModel):
+    model_config = {'arbitrary_types_allowed': True}
+
+    container: str
+    codec: str
+    crf: int = 23
+    fps: int = 25
+    preset: str = 'medium'
+
+
+class VideoSettings(BaseModel):
+    model_config = {'arbitrary_types_allowed': True}
+
+    frames_per_radar: int = 10
+    output_dir: Path = Path('videos')
+    profiles: dict[str, VideoProfile] = {
+        'mkv': VideoProfile(container='mkv', codec='libx265', crf=23),
+        'mp4': VideoProfile(container='mp4', codec='libx264', crf=23),
+        'webm': VideoProfile(container='webm', codec='libvpx-vp9', crf=32),
+    }
 
 
 class WallpaperSettings(BaseModel):
@@ -24,6 +48,8 @@ class WallpaperSettings(BaseModel):
     log_level: str = 'INFO'
 
     historic_enabled: bool = False
+
+    video: VideoSettings = VideoSettings()
 
 
 def _load_yaml(path: Path) -> dict[str, object] | None:

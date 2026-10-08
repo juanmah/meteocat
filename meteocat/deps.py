@@ -13,6 +13,7 @@ _BINARY_TO_PACKAGE: dict[str, dict[str, str]] = {
     'feh': {'arch': 'feh', 'debian': 'feh', 'ubuntu': 'feh'},
     'crontab': {'arch': 'cronie', 'debian': 'cron', 'ubuntu': 'cron'},
     'systemctl': {'arch': 'systemd', 'debian': 'systemd', 'ubuntu': 'systemd'},
+    'ffmpeg': {'arch': 'ffmpeg', 'debian': 'ffmpeg', 'ubuntu': 'ffmpeg'},
 }
 
 _DE_GSETTINGS_DEPS = {'gnome', 'cinnamon', 'mate'}
