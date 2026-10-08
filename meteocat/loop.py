@@ -44,7 +44,9 @@ def run() -> None:
 
         wait = _seconds_until_next_interval()
         logger.info('Next run in %.0f seconds', wait)
-        time.sleep(wait)
+        end = time.monotonic() + wait
+        while time.monotonic() < end and not _shutdown:
+            time.sleep(min(1, end - time.monotonic()))
 
     logger.info('Wallpaper loop stopped.')
 
