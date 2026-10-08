@@ -1,13 +1,10 @@
 import logging
 import signal
-import sys
 import time
 from datetime import UTC, datetime
-from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from meteocat.logger import logger, setup
+from meteocat.wallpaper import generate_wallpaper
 
 INTERVAL_MINUTES = 6
 
@@ -33,8 +30,6 @@ def run() -> None:
     signal.signal(signal.SIGINT, _handle_signal)
 
     logger.info('Wallpaper loop started (interval: %d min)', INTERVAL_MINUTES)
-
-    from meteocat.wallpaper import generate_wallpaper
 
     while not _shutdown:
         try:
