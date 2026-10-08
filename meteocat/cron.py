@@ -7,7 +7,7 @@ from pathlib import Path
 from meteocat.config import settings
 from meteocat.logger import logger
 
-_METEOCAT_MARKER = '# meteocat'
+_METEOCAT_MARKER = 'METEOCAT=1'
 _CRON_SCHEDULE = '*/6 * * * *'
 _LOG_TIMESTAMP_RE = re.compile(r'^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})')
 
@@ -34,9 +34,8 @@ def _has_dbus() -> bool:
 def _cron_entry(uid: str) -> str:
     dbus_prefix = f'export DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/{uid}/bus && ' if _has_dbus() else ''
     return (
-        f'{_METEOCAT_MARKER}\n'
         f'{_CRON_SCHEDULE} {dbus_prefix}'
-        f'cd {settings.working_directory} && '
+        f'METEOCAT=1 cd {settings.working_directory} && '
         f'{settings.service_exec} wallpaper '
         f'>> {settings.working_directory}/cron.log 2>&1\n'
     )
@@ -74,16 +73,7 @@ def uninstall() -> None:
         return
 
     lines = current.splitlines(keepends=True)
-    filtered: list[str] = []
-    skip_next = False
-    for line in lines:
-        if skip_next:
-            skip_next = False
-            continue
-        if _METEOCAT_MARKER in line:
-            skip_next = True
-            continue
-        filtered.append(line)
+    filtered = [line for line in lines if _METEOCAT_MARKER not in line]
     while filtered and filtered[-1].strip() == '':
         filtered.pop()
 
@@ -95,7 +85,7 @@ def status() -> None:
     current = _read_crontab()
     if _METEOCAT_MARKER in current:
         for line in current.splitlines():
-            if _METEOCAT_MARKER in line or line.strip().startswith('*/6'):
+            if _METEOCAT_MARKER in line:
                 logger.info(line)
         log_file = settings.working_directory / 'cron.log'
         if log_file.exists():
