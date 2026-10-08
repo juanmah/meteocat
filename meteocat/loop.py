@@ -3,6 +3,7 @@ import signal
 import time
 from datetime import UTC, datetime
 
+from meteocat.config import settings
 from meteocat.logger import logger, setup
 from meteocat.wallpaper import generate_wallpaper
 
@@ -25,9 +26,18 @@ def _seconds_until_next_interval() -> float:
 
 
 def run() -> None:
-    setup(level=logging.INFO)
+    level = getattr(logging, settings.log_level.upper(), logging.INFO)
+    setup(level=level)
     signal.signal(signal.SIGTERM, _handle_signal)
     signal.signal(signal.SIGINT, _handle_signal)
+
+    logger.info(
+        'scheduler=%s desktop_environment=%s log_level=%s historic_enabled=%s',
+        settings.scheduler,
+        settings.desktop_environment,
+        settings.log_level,
+        settings.historic_enabled,
+    )
 
     logger.info('Wallpaper loop started (interval: %d min)', INTERVAL_MINUTES)
 
