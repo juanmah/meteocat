@@ -4,15 +4,22 @@ from time import sleep
 
 import requests
 
-from meteocat.config import settings
 from meteocat.logger import logger
+
+_BACKGROUND_TILE_MAX_Y = 647
+_BACKGROUND_TILE_OFFSET_X = 510
+_MAX_RETRIES = 5
+_RADAR_OFFSET_X = 63
+_RADAR_OFFSET_Y = 80
+_REQUEST_TIMEOUT = 30
+_RETRY_BACKOFF_BASE = 4
 
 
 def _download_tile(url: str, dest: Path) -> None:
     last_response: requests.Response | None = None
-    for attempt in range(settings.max_retries):
+    for attempt in range(_MAX_RETRIES):
         try:
-            response = requests.get(url, timeout=settings.request_timeout)
+            response = requests.get(url, timeout=_REQUEST_TIMEOUT)
         except requests.RequestException as exc:
             logger.warning('Download failed (%s), retrying...', exc)
         else:
@@ -25,30 +32,26 @@ def _download_tile(url: str, dest: Path) -> None:
                 response.status_code,
                 url,
                 attempt + 1,
-                settings.max_retries,
+                _MAX_RETRIES,
             )
-        cap = settings.retry_backoff_base ** (attempt + 1)
+        cap = _RETRY_BACKOFF_BASE ** (attempt + 1)
         sleep(uniform(0, cap))  # ruff: ignore[suspicious-non-cryptographic-random-usage]  # nosec B311
     else:
         if last_response is not None:
             last_response.raise_for_status()
-        msg = f'Failed to download {url} after {settings.max_retries} attempts'
+        msg = f'Failed to download {url} after {_MAX_RETRIES} attempts'
         raise RuntimeError(msg)
 
 
 def _download_background_tile(args: tuple[int, int, str]) -> None:
     x, y, temp_dir = args
     url = f'https://static-m.meteo.cat/tiles/fons/GoogleMapsCompatible/10/000/000/{x}/000/000/{y}.png'
-    dest = (
-        Path(temp_dir) / f'background-'
-        f'{-(y - settings.background_tile_max_y):02}-'
-        f'{(x - settings.background_tile_offset_x):02}.png'
-    )
+    dest = Path(temp_dir) / f'background-{-(y - _BACKGROUND_TILE_MAX_Y):02}-{(x - _BACKGROUND_TILE_OFFSET_X):02}.png'
     _download_tile(url, dest)
 
 
 def _download_radar_tile(args: tuple[int, int, str, str]) -> None:
     x, y, temp_dir, date = args
     url = f'https://static-m.meteo.cat/tiles/radar/{date}/07/000/000/0{x}/000/000/0{y}.png'
-    dest = Path(temp_dir) / f'radar-{-(y - settings.radar_offset_y)}-{(x - settings.radar_offset_x)}.png'
+    dest = Path(temp_dir) / f'radar-{-(y - _RADAR_OFFSET_Y)}-{(x - _RADAR_OFFSET_X)}.png'
     _download_tile(url, dest)

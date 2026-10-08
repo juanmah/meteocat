@@ -16,6 +16,50 @@ from meteocat.logger import logger
 
 _tqdm_disable = not sys.stderr.isatty()
 
+_CRON_SCHEDULE = '*/6 * * * *'
+_BACKGROUND_RAW = Path('background/background_raw.png')
+_BACKGROUND_4K = Path('background/background_4K.png')
+_BACKGROUND_4K_DARK = Path('background/background_4K_dark.png')
+_RADAR = Path('radar.png')
+_WALLPAPER = Path('wallpaper/wallpaper.png')
+_WALLPAPER_DARK = Path('wallpaper/wallpaper_dark.png')
+_WALLPAPER_HISTORY = Path('history')
+_HISTORIC_ENABLED = False
+
+_BACKGROUND_TILE_RANGE_X = range(510, 528)
+_BACKGROUND_TILE_RANGE_Y = range(638, 648)
+_BACKGROUND_TILE_OFFSET_X = 510
+_BACKGROUND_TILE_OFFSET_Y = 638
+_BACKGROUND_TILE_MAX_Y = 647
+
+_RADAR_TILE_RANGE_X = range(63, 66)
+_RADAR_TILE_RANGE_Y = range(79, 81)
+_RADAR_OFFSET_X = 63
+_RADAR_OFFSET_Y = 80
+
+_TILE_SIZE = 256
+_BACKGROUND_COLUMNS = 18
+_RADAR_COLUMNS = 3
+_MAX_WORKERS = 10
+_RADAR_DELAY_MINUTES = 15
+
+_REQUEST_TIMEOUT = 30
+_MAX_RETRIES = 5
+_RETRY_BACKOFF_BASE = 4
+
+_CROP_LEFT = 300
+_CROP_TOP = 300
+_CROP_WIDTH = 3840
+_CROP_HEIGHT = 2160
+_RECTANGLE_COORDS = (2266, 2029, 2341, 2079)
+_FLOODFILL_POS = (3839, 2159)
+_FLOODFILL_THRESH = 140
+_RESIZE_FACTOR = 1.895
+_PASTE_OFFSET_X = -2402
+_PASTE_OFFSET_Y = -299
+_OPACITY_RADAR = 0.8
+_OPACITY_RADAR_DARK = 0.3
+
 
 _XDG_TOKEN_MAP: dict[str, str] = {
     'GNOME': 'gnome',
@@ -222,35 +266,35 @@ def generate_background(*, check_deps: bool = True) -> None:
         check_dependencies()
 
     with tempfile.TemporaryDirectory() as temp_dir:
-        tasks = [(x, y, temp_dir) for x in settings.background_tile_range_x for y in settings.background_tile_range_y]
-        with ThreadPoolExecutor(max_workers=settings.max_workers) as executor:
+        tasks = [(x, y, temp_dir) for x in _BACKGROUND_TILE_RANGE_X for y in _BACKGROUND_TILE_RANGE_Y]
+        with ThreadPoolExecutor(max_workers=_MAX_WORKERS) as executor:
             list(tqdm(executor.map(_download_background_tile, tasks), total=len(tasks), disable=_tqdm_disable))
         tiles = sorted(Path(temp_dir).glob('background-*.png'))
-        expected = len(settings.background_tile_range_x) * len(settings.background_tile_range_y)
+        expected = len(_BACKGROUND_TILE_RANGE_X) * len(_BACKGROUND_TILE_RANGE_Y)
         if len(tiles) != expected:
             logger.error(f'Expected {expected} background tiles, got {len(tiles)}')
             raise SystemExit(1)
-        canvas = _assemble_tiles(tiles, columns=settings.background_columns)
-        settings.background_raw.parent.mkdir(parents=True, exist_ok=True)
-        canvas.save(settings.background_raw)
-        crop_left = settings.crop_left
-        crop_top = settings.crop_top
-        crop_width = settings.crop_width
-        crop_height = settings.crop_height
+        canvas = _assemble_tiles(tiles, columns=_BACKGROUND_COLUMNS)
+        _BACKGROUND_RAW.parent.mkdir(parents=True, exist_ok=True)
+        canvas.save(_BACKGROUND_RAW)
+        crop_left = _CROP_LEFT
+        crop_top = _CROP_TOP
+        crop_width = _CROP_WIDTH
+        crop_height = _CROP_HEIGHT
         img = canvas.crop((crop_left, crop_top, crop_left + crop_width, crop_top + crop_height))
         _apply_background_overlays(img)
-        img.save(settings.background_4k)
+        img.save(_BACKGROUND_4K)
         img_dark = _make_dark_variant(img)
-        img_dark.save(settings.background_4k_dark)
+        img_dark.save(_BACKGROUND_4K_DARK)
 
 
 def archive_wallpaper(date: str) -> None:
     year, month, day, hour, minute = date.split('/')
     timestamp = f'{year}-{month}-{day}_{hour}-{minute}'
     for suffix, subdir in (('', 'light'), ('_dark', 'dark')):
-        target_dir = settings.wallpaper_history / subdir
+        target_dir = _WALLPAPER_HISTORY / subdir
         target_dir.mkdir(parents=True, exist_ok=True)
-        src = settings.wallpaper if suffix == '' else settings.wallpaper_dark
+        src = _WALLPAPER if suffix == '' else _WALLPAPER_DARK
         dst = target_dir / f'wallpaper{suffix}_{timestamp}.png'
         dst.write_bytes(src.read_bytes())
         logger.info(f'Archived {dst}')
@@ -259,32 +303,32 @@ def archive_wallpaper(date: str) -> None:
 def generate_wallpaper(*, check_deps: bool = True) -> None:
     if check_deps:
         check_dependencies()
-    if not settings.background_4k.is_file():
+    if not _BACKGROUND_4K.is_file():
         logger.info("> Background doesn't exist.")
         logger.info('> Generating a background map of Catalonia from meteo.cat sources.')
         generate_background(check_deps=check_deps)
 
-    now = datetime.now(UTC) - timedelta(minutes=settings.radar_delay_minutes)
+    now = datetime.now(UTC) - timedelta(minutes=_RADAR_DELAY_MINUTES)
     date = f'{now.year}/{now.month:02}/{now.day:02}/{now.hour:02}/{now.minute // 6 * 6:02}'
 
     with tempfile.TemporaryDirectory() as temp_dir:
-        tasks = [(x, y, temp_dir, date) for x in settings.radar_tile_range_x for y in settings.radar_tile_range_y]
-        with ThreadPoolExecutor(max_workers=settings.max_workers) as executor:
+        tasks = [(x, y, temp_dir, date) for x in _RADAR_TILE_RANGE_X for y in _RADAR_TILE_RANGE_Y]
+        with ThreadPoolExecutor(max_workers=_MAX_WORKERS) as executor:
             list(tqdm(executor.map(_download_radar_tile, tasks), total=len(tasks), disable=_tqdm_disable))
         tiles = sorted(Path(temp_dir).glob('radar-*.png'))
-        expected = len(settings.radar_tile_range_x) * len(settings.radar_tile_range_y)
+        expected = len(_RADAR_TILE_RANGE_X) * len(_RADAR_TILE_RANGE_Y)
         if len(tiles) != expected:
             logger.error(f'Expected {expected} radar tiles, got {len(tiles)}')
             raise SystemExit(1)
-        canvas = _assemble_tiles(tiles, columns=settings.radar_columns)
-        radar = Path(temp_dir) / settings.radar
+        canvas = _assemble_tiles(tiles, columns=_RADAR_COLUMNS)
+        radar = Path(temp_dir) / _RADAR
         canvas.save(radar)
-        settings.wallpaper.parent.mkdir(parents=True, exist_ok=True)
-        _composite_radar(settings.background_4k, radar, settings.wallpaper, settings.opacity_radar)
-        _composite_radar(settings.background_4k_dark, radar, settings.wallpaper_dark, settings.opacity_radar_dark)
+        _WALLPAPER.parent.mkdir(parents=True, exist_ok=True)
+        _composite_radar(_BACKGROUND_4K, radar, _WALLPAPER, _OPACITY_RADAR)
+        _composite_radar(_BACKGROUND_4K_DARK, radar, _WALLPAPER_DARK, _OPACITY_RADAR_DARK)
 
-    _set_wallpaper(settings.wallpaper.resolve())
-    _set_wallpaper(settings.wallpaper_dark.resolve(), dark=True)
+    _set_wallpaper(_WALLPAPER.resolve())
+    _set_wallpaper(_WALLPAPER_DARK.resolve(), dark=True)
     logger.info('Updated meteo.cat radar background.')
-    if settings.historic_enabled:
+    if _HISTORIC_ENABLED:
         archive_wallpaper(date)
