@@ -4,7 +4,7 @@ import tempfile
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from shutil import which
+from shutil import move, which
 
 from tqdm import tqdm
 
@@ -24,7 +24,6 @@ _RADAR = Path('radar.png')
 _WALLPAPER = Path('wallpaper/wallpaper.png')
 _WALLPAPER_DARK = Path('wallpaper/wallpaper_dark.png')
 _WALLPAPER_HISTORY = Path('history')
-_HISTORIC_ENABLED = False
 
 _BACKGROUND_TILE_RANGE_X = range(510, 528)
 _BACKGROUND_TILE_RANGE_Y = range(638, 648)
@@ -288,7 +287,7 @@ def generate_background(*, check_deps: bool = True) -> None:
         img_dark.save(_BACKGROUND_4K_DARK)
 
 
-def archive_wallpaper(date: str) -> None:
+def archive_wallpaper(date: str, *, move_files: bool = False) -> None:
     year, month, day, hour, minute = date.split('/')
     timestamp = f'{year}-{month}-{day}_{hour}-{minute}'
     for suffix, subdir in (('', 'light'), ('_dark', 'dark')):
@@ -296,11 +295,14 @@ def archive_wallpaper(date: str) -> None:
         target_dir.mkdir(parents=True, exist_ok=True)
         src = _WALLPAPER if suffix == '' else _WALLPAPER_DARK
         dst = target_dir / f'wallpaper{suffix}_{timestamp}.png'
-        dst.write_bytes(src.read_bytes())
+        if move_files:
+            move(str(src), str(dst))
+        else:
+            dst.write_bytes(src.read_bytes())
         logger.info(f'Archived {dst}')
 
 
-def generate_wallpaper(*, check_deps: bool = True) -> None:
+def generate_wallpaper(*, check_deps: bool = True, move_files: bool = False) -> None:
     if check_deps:
         check_dependencies()
     if not _BACKGROUND_4K.is_file():
@@ -330,5 +332,5 @@ def generate_wallpaper(*, check_deps: bool = True) -> None:
     _set_wallpaper(_WALLPAPER.resolve())
     _set_wallpaper(_WALLPAPER_DARK.resolve(), dark=True)
     logger.info('Updated meteo.cat radar background.')
-    if _HISTORIC_ENABLED:
-        archive_wallpaper(date)
+    if settings.historic_enabled:
+        archive_wallpaper(date, move_files=move_files)

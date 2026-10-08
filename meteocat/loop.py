@@ -43,7 +43,7 @@ def run() -> None:
 
     while not _shutdown:
         try:
-            generate_wallpaper(check_deps=False)
+            generate_wallpaper(check_deps=False, move_files=True)
         except SystemExit:
             raise
         except Exception:  # ruff: ignore[blind-except]
