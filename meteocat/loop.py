@@ -82,11 +82,12 @@ def run() -> None:
     signal.signal(signal.SIGINT, _handle_signal)
 
     logger.info(
-        'scheduler=%s desktop_environment=%s log_level=%s historic_enabled=%s',
+        'scheduler=%s desktop_environment=%s log_level=%s historic_enabled=%s historic_format=%s',
         settings.scheduler,
         settings.desktop_environment,
         settings.log_level,
         settings.historic_enabled,
+        settings.historic_format,
     )
 
     logger.info('Wallpaper loop started (interval: %d min)', INTERVAL_MINUTES)

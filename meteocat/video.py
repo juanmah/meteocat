@@ -10,7 +10,14 @@ import ffmpeg
 from tqdm import tqdm
 
 from meteocat.config import _HISTORY_DIR
+from meteocat.image import _composite_radar
 from meteocat.logger import logger
+from meteocat.wallpaper import (
+    _BACKGROUND_4K,
+    _BACKGROUND_4K_DARK,
+    _OPACITY_RADAR,
+    _OPACITY_RADAR_DARK,
+)
 
 _RADAR_STEP_MINUTES = 6
 _tqdm_disable = not sys.stderr.isatty()
@@ -33,6 +40,17 @@ def _frame_path(timestamp: datetime, *, dark: bool) -> Path:
     subdir = 'dark' if dark else 'light'
     suffix = '_dark' if dark else ''
     return _HISTORY_DIR / subdir / f'wallpaper{suffix}_{ts}.png'
+
+
+def _radar_frame_path(timestamp: datetime) -> Path:
+    ts = timestamp.strftime('%Y-%m-%d_%H-%M')
+    return _HISTORY_DIR / 'radar' / f'radar_{ts}.png'
+
+
+_VARIANT_BACKGROUNDS: dict[str, tuple[Path, float]] = {
+    'light': (_BACKGROUND_4K, _OPACITY_RADAR),
+    'dark': (_BACKGROUND_4K_DARK, _OPACITY_RADAR_DARK),
+}
 
 
 def _format_missing_range(start: datetime, end: datetime) -> str:
@@ -80,13 +98,28 @@ def generate_frames(
         variant_index = 0
         missing: list[datetime] = []
         for ts in timestamps:
-            src = _frame_path(ts, dark=(variant == 'dark'))
-            if not src.is_file():
-                missing.append(ts)
-                continue
             dst = tmp / f'frame_{variant_index:04d}_{variant}.png'
-            dst.symlink_to(src.resolve())
-            variant_index += 1
+            radar_src = _radar_frame_path(ts)
+            if radar_src.is_file():
+                background, opacity = _VARIANT_BACKGROUNDS[variant]
+                if not background.is_file():
+                    logger.warning(
+                        'Missing background %s, skipping %s frame for %s',
+                        background,
+                        variant,
+                        ts.strftime('%Y-%m-%d %H:%M'),
+                    )
+                    missing.append(ts)
+                    continue
+                _composite_radar(background, radar_src, dst, opacity)
+                variant_index += 1
+                continue
+            src = _frame_path(ts, dark=(variant == 'dark'))
+            if src.is_file():
+                dst.symlink_to(src.resolve())
+                variant_index += 1
+                continue
+            missing.append(ts)
         if missing:
             logger.warning(
                 'Missing %d %s frames: %s',
@@ -96,9 +129,10 @@ def generate_frames(
             )
 
     if not any(
-        tmp.glob(f'frame_*_{variant}.png')
+        frame
         for variant in ('light', 'dark')
         if (variant == 'light' and light) or (variant == 'dark' and dark)
+        for frame in tmp.glob(f'frame_*_{variant}.png')
     ):
         logger.error(
             'No frames found in range %s → %s',
