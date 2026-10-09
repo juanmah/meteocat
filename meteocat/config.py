@@ -3,7 +3,7 @@ from pathlib import Path
 import yaml
 from pydantic import BaseModel
 
-_HISTORY_DIR = Path('history')
+_RADAR_DIR = Path('radar')
 
 
 class ConfigPaths(BaseModel):

@@ -2,17 +2,17 @@ import os
 import sys
 import tempfile
 from concurrent.futures import ThreadPoolExecutor
-from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from shutil import which
 
 from tqdm import tqdm
 
-from meteocat.config import _HISTORY_DIR, settings
+from meteocat.config import settings
 from meteocat.deps import check_dependencies
-from meteocat.download import _download_background_tile, _download_radar_tile
+from meteocat.download import _download_background_tile
 from meteocat.image import _apply_background_overlays, _assemble_tiles, _composite_radar, _make_dark_variant
 from meteocat.logger import logger
+from meteocat.radar import download_radar
 
 _tqdm_disable = not sys.stderr.isatty()
 
@@ -20,7 +20,6 @@ _CRON_SCHEDULE = '*/6 * * * *'
 _BACKGROUND_RAW = Path('background/background_raw.png')
 _BACKGROUND_4K = Path('background/background_4K.png')
 _BACKGROUND_4K_DARK = Path('background/background_4K_dark.png')
-_RADAR = Path('radar.png')
 _WALLPAPER = Path('wallpaper/wallpaper.png')
 _WALLPAPER_DARK = Path('wallpaper/wallpaper_dark.png')
 
@@ -30,20 +29,8 @@ _BACKGROUND_TILE_OFFSET_X = 510
 _BACKGROUND_TILE_OFFSET_Y = 638
 _BACKGROUND_TILE_MAX_Y = 647
 
-_RADAR_TILE_RANGE_X = range(63, 66)
-_RADAR_TILE_RANGE_Y = range(79, 81)
-_RADAR_OFFSET_X = 63
-_RADAR_OFFSET_Y = 80
-
-_TILE_SIZE = 256
 _BACKGROUND_COLUMNS = 18
-_RADAR_COLUMNS = 3
 _MAX_WORKERS = 10
-_RADAR_DELAY_MINUTES = 15
-
-_REQUEST_TIMEOUT = 30
-_MAX_RETRIES = 5
-_RETRY_BACKOFF_BASE = 4
 
 _CROP_LEFT = 300
 _CROP_TOP = 300
@@ -286,15 +273,6 @@ def generate_background(*, check_deps: bool = True) -> None:
         img_dark.save(_BACKGROUND_4K_DARK)
 
 
-def archive_radar(date: str, radar_path: Path) -> None:
-    year, month, day, hour, minute = date.split('/')
-    timestamp = f'{year}-{month}-{day}_{hour}-{minute}'
-    _HISTORY_DIR.mkdir(parents=True, exist_ok=True)
-    dst = _HISTORY_DIR / f'radar_{timestamp}.png'
-    dst.write_bytes(radar_path.read_bytes())
-    logger.info(f'Archived {dst}')
-
-
 def generate_wallpaper(*, check_deps: bool = True) -> None:
     if check_deps:
         check_dependencies()
@@ -303,26 +281,11 @@ def generate_wallpaper(*, check_deps: bool = True) -> None:
         logger.info('> Generating a background map of Catalonia from meteo.cat sources.')
         generate_background(check_deps=check_deps)
 
-    now = datetime.now(UTC) - timedelta(minutes=_RADAR_DELAY_MINUTES)
-    date = f'{now.year}/{now.month:02}/{now.day:02}/{now.hour:02}/{now.minute // 6 * 6:02}'
+    radar = download_radar(check_deps=False)
 
-    with tempfile.TemporaryDirectory() as temp_dir:
-        tasks = [(x, y, temp_dir, date) for x in _RADAR_TILE_RANGE_X for y in _RADAR_TILE_RANGE_Y]
-        with ThreadPoolExecutor(max_workers=_MAX_WORKERS) as executor:
-            list(tqdm(executor.map(_download_radar_tile, tasks), total=len(tasks), disable=_tqdm_disable))
-        tiles = sorted(Path(temp_dir).glob('radar-*.png'))
-        expected = len(_RADAR_TILE_RANGE_X) * len(_RADAR_TILE_RANGE_Y)
-        if len(tiles) != expected:
-            logger.error(f'Expected {expected} radar tiles, got {len(tiles)}')
-            raise SystemExit(1)
-        canvas = _assemble_tiles(tiles, columns=_RADAR_COLUMNS)
-        radar = Path(temp_dir) / _RADAR
-        canvas.save(radar)
-        _WALLPAPER.parent.mkdir(parents=True, exist_ok=True)
-        _composite_radar(_BACKGROUND_4K, radar, _WALLPAPER, _OPACITY_RADAR)
-        _composite_radar(_BACKGROUND_4K_DARK, radar, _WALLPAPER_DARK, _OPACITY_RADAR_DARK)
-        if settings.historic_enabled:
-            archive_radar(date, radar)
+    _WALLPAPER.parent.mkdir(parents=True, exist_ok=True)
+    _composite_radar(_BACKGROUND_4K, radar, _WALLPAPER, _OPACITY_RADAR)
+    _composite_radar(_BACKGROUND_4K_DARK, radar, _WALLPAPER_DARK, _OPACITY_RADAR_DARK)
 
     _set_wallpaper(_WALLPAPER.resolve())
     _set_wallpaper(_WALLPAPER_DARK.resolve(), dark=True)

@@ -9,7 +9,7 @@ from pathlib import Path
 import ffmpeg
 from tqdm import tqdm
 
-from meteocat.config import _HISTORY_DIR
+from meteocat.config import _RADAR_DIR
 from meteocat.image import _composite_radar
 from meteocat.logger import logger
 from meteocat.wallpaper import (
@@ -37,7 +37,7 @@ def _iter_radar_timestamps(from_dt: datetime, to_dt: datetime) -> list[datetime]
 
 def _radar_frame_path(timestamp: datetime) -> Path:
     ts = timestamp.strftime('%Y-%m-%d_%H-%M')
-    return _HISTORY_DIR / f'radar_{ts}.png'
+    return _RADAR_DIR / f'radar_{ts}.png'
 
 
 _VARIANT_BACKGROUNDS: dict[str, tuple[Path, float]] = {

@@ -61,6 +61,14 @@ def background() -> None:
 
 
 @app.command()
+def radar() -> None:
+    """Download the latest meteo.cat radar map."""
+    from meteocat.radar import download_radar
+
+    download_radar()
+
+
+@app.command()
 def wallpaper() -> None:
     """Generate a wallpaper with an updated meteo.cat radar map."""
     from meteocat.wallpaper import generate_wallpaper
