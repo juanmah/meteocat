@@ -82,19 +82,18 @@ def run() -> None:
     signal.signal(signal.SIGINT, _handle_signal)
 
     logger.info(
-        'scheduler=%s desktop_environment=%s log_level=%s historic_enabled=%s historic_format=%s',
+        'scheduler=%s desktop_environment=%s log_level=%s historic_enabled=%s',
         settings.scheduler,
         settings.desktop_environment,
         settings.log_level,
         settings.historic_enabled,
-        settings.historic_format,
     )
 
     logger.info('Wallpaper loop started (interval: %d min)', INTERVAL_MINUTES)
 
     while not _shutdown:
         try:
-            generate_wallpaper(check_deps=False, move_files=True)
+            generate_wallpaper(check_deps=False)
         except SystemExit:
             raise
         except Exception:  # ruff: ignore[blind-except]

@@ -35,16 +35,9 @@ def _iter_radar_timestamps(from_dt: datetime, to_dt: datetime) -> list[datetime]
     return timestamps
 
 
-def _frame_path(timestamp: datetime, *, dark: bool) -> Path:
-    ts = timestamp.strftime('%Y-%m-%d_%H-%M')
-    subdir = 'dark' if dark else 'light'
-    suffix = '_dark' if dark else ''
-    return _HISTORY_DIR / subdir / f'wallpaper{suffix}_{ts}.png'
-
-
 def _radar_frame_path(timestamp: datetime) -> Path:
     ts = timestamp.strftime('%Y-%m-%d_%H-%M')
-    return _HISTORY_DIR / 'radar' / f'radar_{ts}.png'
+    return _HISTORY_DIR / f'radar_{ts}.png'
 
 
 _VARIANT_BACKGROUNDS: dict[str, tuple[Path, float]] = {
@@ -112,11 +105,6 @@ def generate_frames(
                     missing.append(ts)
                     continue
                 _composite_radar(background, radar_src, dst, opacity)
-                variant_index += 1
-                continue
-            src = _frame_path(ts, dark=(variant == 'dark'))
-            if src.is_file():
-                dst.symlink_to(src.resolve())
                 variant_index += 1
                 continue
             missing.append(ts)

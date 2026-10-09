@@ -4,7 +4,7 @@ import tempfile
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from shutil import move, which
+from shutil import which
 
 from tqdm import tqdm
 
@@ -286,36 +286,16 @@ def generate_background(*, check_deps: bool = True) -> None:
         img_dark.save(_BACKGROUND_4K_DARK)
 
 
-def archive_wallpaper(date: str, *, move_files: bool = False) -> None:
-    logger.warning(
-        'Saving full wallpapers to history is deprecated and will be removed in a future release; '
-        'use historic_format: radar instead.'
-    )
-    year, month, day, hour, minute = date.split('/')
-    timestamp = f'{year}-{month}-{day}_{hour}-{minute}'
-    for suffix, subdir in (('', 'light'), ('_dark', 'dark')):
-        target_dir = _HISTORY_DIR / subdir
-        target_dir.mkdir(parents=True, exist_ok=True)
-        src = _WALLPAPER if suffix == '' else _WALLPAPER_DARK
-        dst = target_dir / f'wallpaper{suffix}_{timestamp}.png'
-        if move_files:
-            move(str(src), str(dst))
-        else:
-            dst.write_bytes(src.read_bytes())
-        logger.info(f'Archived {dst}')
-
-
 def archive_radar(date: str, radar_path: Path) -> None:
     year, month, day, hour, minute = date.split('/')
     timestamp = f'{year}-{month}-{day}_{hour}-{minute}'
-    target_dir = _HISTORY_DIR / 'radar'
-    target_dir.mkdir(parents=True, exist_ok=True)
-    dst = target_dir / f'radar_{timestamp}.png'
+    _HISTORY_DIR.mkdir(parents=True, exist_ok=True)
+    dst = _HISTORY_DIR / f'radar_{timestamp}.png'
     dst.write_bytes(radar_path.read_bytes())
     logger.info(f'Archived {dst}')
 
 
-def generate_wallpaper(*, check_deps: bool = True, move_files: bool = False) -> None:
+def generate_wallpaper(*, check_deps: bool = True) -> None:
     if check_deps:
         check_dependencies()
     if not _BACKGROUND_4K.is_file():
@@ -341,11 +321,9 @@ def generate_wallpaper(*, check_deps: bool = True, move_files: bool = False) -> 
         _WALLPAPER.parent.mkdir(parents=True, exist_ok=True)
         _composite_radar(_BACKGROUND_4K, radar, _WALLPAPER, _OPACITY_RADAR)
         _composite_radar(_BACKGROUND_4K_DARK, radar, _WALLPAPER_DARK, _OPACITY_RADAR_DARK)
-        if settings.historic_enabled and settings.historic_format != 'wallpaper':
+        if settings.historic_enabled:
             archive_radar(date, radar)
 
     _set_wallpaper(_WALLPAPER.resolve())
     _set_wallpaper(_WALLPAPER_DARK.resolve(), dark=True)
     logger.info('Updated meteo.cat radar background.')
-    if settings.historic_enabled and settings.historic_format == 'wallpaper':
-        archive_wallpaper(date, move_files=move_files)

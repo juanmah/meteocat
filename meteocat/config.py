@@ -48,7 +48,6 @@ class WallpaperSettings(BaseModel):
     log_level: str = 'INFO'
 
     historic_enabled: bool = False
-    historic_format: str = 'radar'
 
     video: VideoSettings = VideoSettings()
 
