@@ -1,13 +1,22 @@
+import io
+import re
+import sys
 import tempfile
+from collections.abc import Iterator
 from datetime import datetime, timedelta
 from pathlib import Path
 
 import ffmpeg
+from tqdm import tqdm
 
 from meteocat.config import _HISTORY_DIR
 from meteocat.logger import logger
 
 _RADAR_STEP_MINUTES = 6
+_tqdm_disable = not sys.stderr.isatty()
+_FRAME_RE = re.compile(rb'frame=\s*(\d+)')
+_FFMPEG_CMD = 'ffmpeg'
+_STATS_PERIOD = '0.1'
 
 
 def _iter_radar_timestamps(from_dt: datetime, to_dt: datetime) -> list[datetime]:
@@ -24,6 +33,27 @@ def _frame_path(timestamp: datetime, *, dark: bool) -> Path:
     subdir = 'dark' if dark else 'light'
     suffix = '_dark' if dark else ''
     return _HISTORY_DIR / subdir / f'wallpaper{suffix}_{ts}.png'
+
+
+def _format_missing_range(start: datetime, end: datetime) -> str:
+    if start == end:
+        return start.strftime('%Y-%m-%d %H:%M')
+    if start.date() == end.date():
+        return f'{start.strftime("%Y-%m-%d %H:%M")}-{end.strftime("%H:%M")}'
+    return f'{start.strftime("%Y-%m-%d %H:%M")}-{end.strftime("%Y-%m-%d %H:%M")}'
+
+
+def _format_missing_ranges(missing: list[datetime]) -> str:
+    ranges: list[str] = []
+    start = prev = missing[0]
+    for ts in missing[1:]:
+        if ts - prev == timedelta(minutes=_RADAR_STEP_MINUTES):
+            prev = ts
+            continue
+        ranges.append(_format_missing_range(start, prev))
+        start = prev = ts
+    ranges.append(_format_missing_range(start, prev))
+    return ', '.join(ranges)
 
 
 def generate_frames(
@@ -48,18 +78,22 @@ def generate_frames(
         if not enabled:
             continue
         variant_index = 0
+        missing: list[datetime] = []
         for ts in timestamps:
             src = _frame_path(ts, dark=(variant == 'dark'))
             if not src.is_file():
-                logger.warning(
-                    'Missing frame for %s at %s, skipping',
-                    variant,
-                    ts.strftime('%Y-%m-%d %H:%M'),
-                )
+                missing.append(ts)
                 continue
             dst = tmp / f'frame_{variant_index:04d}_{variant}.png'
             dst.symlink_to(src.resolve())
             variant_index += 1
+        if missing:
+            logger.warning(
+                'Missing %d %s frames: %s',
+                len(missing),
+                variant,
+                _format_missing_ranges(missing),
+            )
 
     if not any(
         tmp.glob(f'frame_*_{variant}.png')
@@ -74,6 +108,48 @@ def generate_frames(
         raise SystemExit(1)
 
     return tmp, timestamps
+
+
+def _iter_progress_lines(stderr: io.BufferedReader) -> Iterator[bytes]:
+    buffer = b''
+    while True:
+        chunk = stderr.read1(8192)
+        if not chunk:
+            break
+        buffer += chunk.replace(b'\r', b'\n')
+        *lines, buffer = buffer.split(b'\n')
+        yield from lines
+    if buffer:
+        yield buffer
+
+
+def _run_ffmpeg(
+    stream: ffmpeg.nodes.OutputStream,
+    *,
+    total_frames: int,
+    desc: str,
+) -> None:
+    process = stream.run_async(pipe_stderr=True)
+    stderr_lines: list[bytes] = []
+    last_frame = 0
+    with tqdm(
+        total=total_frames,
+        unit='frame',
+        desc=desc,
+        disable=_tqdm_disable,
+    ) as bar:
+        for line in _iter_progress_lines(process.stderr):
+            stderr_lines.append(line)
+            match = _FRAME_RE.search(line)
+            if match:
+                frame = int(match.group(1))
+                if frame > last_frame:
+                    bar.update(frame - last_frame)
+                    last_frame = frame
+        bar.update(total_frames - bar.n)
+    process.wait()
+    if process.returncode != 0:
+        raise ffmpeg.Error(_FFMPEG_CMD, b'', b'\n'.join(stderr_lines))
 
 
 def encode_video(
@@ -118,12 +194,15 @@ def encode_video(
             logger.info('Video already exists: %s', variant_output)
             continue
         pattern = str(frames_dir / f'frame_%04d_{variant}.png')
+        total_frames = len(list(frames_dir.glob(f'frame_*_{variant}.png')))
         logger.info('Encoding %s video: %s', variant, variant_output)
-        (
+        _run_ffmpeg(
             ffmpeg.input(pattern, framerate=fps)
             .output(str(variant_output), vcodec=codec, crf=crf, preset=preset)
             .overwrite_output()
-            .run()
+            .global_args('-hide_banner', '-stats_period', _STATS_PERIOD),
+            total_frames=total_frames,
+            desc=f'Encoding {variant}',
         )
 
     return output
