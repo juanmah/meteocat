@@ -1,16 +1,27 @@
+import contextlib
 import io
-import re
+import subprocess  # ruff: ignore[suspicious-subprocess-import] # nosec B404
 import sys
-import tempfile
+import threading
 from collections.abc import Iterator
 from datetime import datetime, timedelta
 from pathlib import Path
 
 import ffmpeg
-from tqdm import tqdm
+from PIL import Image
+from rich.console import Console
+from rich.progress import (
+    BarColumn,
+    Progress,
+    ProgressColumn,
+    TaskID,
+    TaskProgressColumn,
+    TextColumn,
+    TimeRemainingColumn,
+)
 
-from meteocat.config import _RADAR_DIR
-from meteocat.image import _composite_radar
+from meteocat.config import _RADAR_DIR, VideoProfile
+from meteocat.image import _composite_radar_image
 from meteocat.logger import logger
 from meteocat.wallpaper import (
     _BACKGROUND_4K,
@@ -20,10 +31,18 @@ from meteocat.wallpaper import (
 )
 
 _RADAR_STEP_MINUTES = 6
-_tqdm_disable = not sys.stderr.isatty()
-_FRAME_RE = re.compile(rb'frame=\s*(\d+)')
+_progress_console = Console(stderr=True)
+_progress_disable = not sys.stderr.isatty()
 _FFMPEG_CMD = 'ffmpeg'
 _STATS_PERIOD = '0.1'
+
+_PROGRESS_COLUMNS: tuple[ProgressColumn, ...] = (
+    TextColumn('[progress.description]{task.description}'),
+    BarColumn(),
+    TextColumn('{task.completed}/{task.total}'),
+    TaskProgressColumn(),
+    TimeRemainingColumn(),
+)
 
 
 def _iter_radar_timestamps(from_dt: datetime, to_dt: datetime) -> list[datetime]:
@@ -67,69 +86,17 @@ def _format_missing_ranges(missing: list[datetime]) -> str:
     return ', '.join(ranges)
 
 
-def generate_frames(
-    from_dt: datetime,
-    to_dt: datetime,
-    *,
-    light: bool = True,
-    dark: bool = True,
-) -> tuple[Path, list[datetime]]:
-    timestamps = _iter_radar_timestamps(from_dt, to_dt)
-    if not timestamps:
-        logger.error(
-            'No radar timestamps in range %s → %s',
-            from_dt.strftime('%Y-%m-%d %H:%M'),
-            to_dt.strftime('%Y-%m-%d %H:%M'),
-        )
-        raise SystemExit(1)
-
-    tmp = Path(tempfile.mkdtemp())
-
-    for variant, enabled in (('light', light), ('dark', dark)):
-        if not enabled:
-            continue
-        variant_index = 0
-        missing: list[datetime] = []
-        for ts in timestamps:
-            dst = tmp / f'frame_{variant_index:04d}_{variant}.png'
-            radar_src = _radar_frame_path(ts)
-            if radar_src.is_file():
-                background, opacity = _VARIANT_BACKGROUNDS[variant]
-                if not background.is_file():
-                    logger.warning(
-                        'Missing background %s, skipping %s frame for %s',
-                        background,
-                        variant,
-                        ts.strftime('%Y-%m-%d %H:%M'),
-                    )
-                    missing.append(ts)
-                    continue
-                _composite_radar(background, radar_src, dst, opacity)
-                variant_index += 1
-                continue
+def _split_available_timestamps(
+    timestamps: list[datetime],
+) -> tuple[list[datetime], list[datetime]]:
+    available: list[datetime] = []
+    missing: list[datetime] = []
+    for ts in timestamps:
+        if _radar_frame_path(ts).is_file():
+            available.append(ts)
+        else:
             missing.append(ts)
-        if missing:
-            logger.warning(
-                'Missing %d %s frames: %s',
-                len(missing),
-                variant,
-                _format_missing_ranges(missing),
-            )
-
-    if not any(
-        frame
-        for variant in ('light', 'dark')
-        if (variant == 'light' and light) or (variant == 'dark' and dark)
-        for frame in tmp.glob(f'frame_*_{variant}.png')
-    ):
-        logger.error(
-            'No frames found in range %s → %s',
-            from_dt.strftime('%Y-%m-%d %H:%M'),
-            to_dt.strftime('%Y-%m-%d %H:%M'),
-        )
-        raise SystemExit(1)
-
-    return tmp, timestamps
+    return available, missing
 
 
 def _iter_progress_lines(stderr: io.BufferedReader) -> Iterator[bytes]:
@@ -145,89 +112,127 @@ def _iter_progress_lines(stderr: io.BufferedReader) -> Iterator[bytes]:
         yield buffer
 
 
-def _run_ffmpeg(
-    stream: ffmpeg.nodes.OutputStream,
-    *,
-    total_frames: int,
-    desc: str,
-) -> None:
-    process = stream.run_async(pipe_stderr=True)
-    stderr_lines: list[bytes] = []
-    last_frame = 0
-    with tqdm(
-        total=total_frames,
-        unit='frame',
-        desc=desc,
-        disable=_tqdm_disable,
-    ) as bar:
-        for line in _iter_progress_lines(process.stderr):
-            stderr_lines.append(line)
-            match = _FRAME_RE.search(line)
-            if match:
-                frame = int(match.group(1))
-                if frame > last_frame:
-                    bar.update(frame - last_frame)
-                    last_frame = frame
-        bar.update(total_frames - bar.n)
-    process.wait()
-    if process.returncode != 0:
-        raise ffmpeg.Error(_FFMPEG_CMD, b'', b'\n'.join(stderr_lines))
+class _StreamEncoder:
+    def _drain_stderr(self) -> None:
+        for line in _iter_progress_lines(self.process.stderr):
+            self.stderr_lines.append(line)
+
+    def __init__(
+        self,
+        output: Path,
+        profile: VideoProfile,
+        background: Path,
+        opacity: float,
+    ) -> None:
+        self.background = Image.open(background).convert('RGBA')
+        self.opacity = opacity
+        self.stderr_lines: list[bytes] = []
+        self.process: subprocess.Popen[bytes] = (
+            ffmpeg.input('pipe:', format='image2pipe', framerate=str(profile.fps))
+            .output(
+                str(output),
+                vcodec=profile.codec,
+                crf=str(profile.crf),
+                preset=profile.preset,
+            )
+            .overwrite_output()
+            .global_args('-hide_banner', '-stats_period', _STATS_PERIOD)
+            .run_async(pipe_stdin=True, pipe_stderr=True)
+        )
+        self._drain_thread = threading.Thread(target=self._drain_stderr, daemon=True)
+        self._drain_thread.start()
+
+    def write_frame(self, radar_src: Path) -> None:
+        frame = _composite_radar_image(self.background.copy(), radar_src, self.opacity)
+        buffer = io.BytesIO()
+        frame.save(buffer, format='PNG')
+        self.process.stdin.write(buffer.getvalue())
+
+    def shutdown(self) -> None:
+        if self.process.stdin is not None:
+            with contextlib.suppress(BrokenPipeError):
+                self.process.stdin.close()
+        self._drain_thread.join()
+        self.process.wait()
 
 
-def encode_video(
-    frames_dir: Path,
-    timestamps: list[datetime],
+def _plan_variants(
+    output_dir: Path,
     profile_name: str,
-    profile: object,
-    *,
-    light: bool = True,
-    dark: bool = True,
-) -> Path:
-    from meteocat.config import settings
-
-    output_dir = settings.video.output_dir
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    from_dt = timestamps[0]
-    to_dt = timestamps[-1]
-    range_str = f'{from_dt.strftime("%Y%m%d_%H%M")}_{to_dt.strftime("%Y%m%d_%H%M")}'
-
-    variants = []
-    if light:
-        variants.append('light')
-    if dark:
-        variants.append('dark')
-
-    ext = profile.container
-    output = output_dir / f'video_{profile_name}_{range_str}.{ext}'
-
-    if output.is_file():
-        logger.info('Video already exists: %s', output)
-        return output
-
-    fps = str(profile.fps)
-    codec = profile.codec
-    crf = str(profile.crf)
-    preset = profile.preset
-
+    ext: str,
+    range_str: str,
+    variants: list[str],
+    available: list[datetime],
+    missing: list[datetime],
+) -> list[tuple[str, Path, Path, float]]:
+    planned: list[tuple[str, Path, Path, float]] = []
     for variant in variants:
         variant_output = output_dir / f'video_{profile_name}_{range_str}_{variant}.{ext}'
         if variant_output.is_file():
             logger.info('Video already exists: %s', variant_output)
             continue
-        pattern = str(frames_dir / f'frame_%04d_{variant}.png')
-        total_frames = len(list(frames_dir.glob(f'frame_*_{variant}.png')))
-        logger.info('Encoding %s video: %s', variant, variant_output)
-        _run_ffmpeg(
-            ffmpeg.input(pattern, framerate=fps)
-            .output(str(variant_output), vcodec=codec, crf=crf, preset=preset)
-            .overwrite_output()
-            .global_args('-hide_banner', '-stats_period', _STATS_PERIOD),
-            total_frames=total_frames,
-            desc=f'Encoding {variant}',
-        )
+        background, opacity = _VARIANT_BACKGROUNDS[variant]
+        if not background.is_file():
+            logger.warning('Missing background %s, skipping %s video', background, variant)
+            continue
+        if missing:
+            logger.warning(
+                'Missing %d %s frames: %s',
+                len(missing),
+                variant,
+                _format_missing_ranges(missing),
+            )
+        if not available:
+            continue
+        planned.append((variant, variant_output, background, opacity))
+    return planned
 
-    return output
+
+def _all_variant_outputs_exist(
+    output_dir: Path, profile_name: str, ext: str, range_str: str, variants: list[str]
+) -> bool:
+    return all((output_dir / f'video_{profile_name}_{range_str}_{variant}.{ext}').is_file() for variant in variants)
+
+
+def _stream_frames(
+    encoder: _StreamEncoder,
+    available: list[datetime],
+    progress: Progress,
+    task: TaskID,
+) -> None:
+    for ts in available:
+        radar_src = _radar_frame_path(ts)
+        try:
+            encoder.write_frame(radar_src)
+        except BrokenPipeError:
+            break
+        progress.update(task, advance=1)
+
+
+def _encode_variant(
+    variant: str,
+    variant_output: Path,
+    profile: VideoProfile,
+    background: Path,
+    opacity: float,
+    available: list[datetime],
+) -> None:
+    logger.info('Encoding %s video: %s', variant, variant_output)
+    encoder = _StreamEncoder(variant_output, profile, background, opacity)
+    total_frames = len(available)
+    with Progress(
+        *_PROGRESS_COLUMNS,
+        console=_progress_console,
+        disable=_progress_disable,
+    ) as progress:
+        task = progress.add_task(f'Encoding {variant}', total=total_frames)
+        try:
+            _stream_frames(encoder, available, progress, task)
+        finally:
+            encoder.shutdown()
+            progress.update(task, completed=total_frames)
+    if encoder.process.returncode != 0:
+        raise ffmpeg.Error(_FFMPEG_CMD, b'', b'\n'.join(encoder.stderr_lines))
 
 
 def create_video(
@@ -245,13 +250,42 @@ def create_video(
         logger.error('Unknown video profile: %s', profile_name)
         raise SystemExit(1)
 
-    frames_dir, timestamps = generate_frames(from_dt, to_dt, light=light, dark=dark)
-    try:
-        output = encode_video(frames_dir, timestamps, profile_name, profile, light=light, dark=dark)
-    finally:
-        for f in frames_dir.glob('frame_*.png'):
-            f.unlink()
-        frames_dir.rmdir()
+    output_dir = settings.video.output_dir
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    timestamps = _iter_radar_timestamps(from_dt, to_dt)
+    if not timestamps:
+        logger.error(
+            'No radar timestamps in range %s → %s',
+            from_dt.strftime('%Y-%m-%d %H:%M'),
+            to_dt.strftime('%Y-%m-%d %H:%M'),
+        )
+        raise SystemExit(1)
+
+    available, missing = _split_available_timestamps(timestamps)
+
+    range_str = f'{timestamps[0].strftime("%Y%m%d_%H%M")}_{timestamps[-1].strftime("%Y%m%d_%H%M")}'
+    ext = profile.container
+    output = output_dir / f'video_{profile_name}_{range_str}.{ext}'
+    if output.is_file():
+        logger.info('Video already exists: %s', output)
+        return output
+
+    variants = [variant for variant, enabled in (('light', light), ('dark', dark)) if enabled]
+    planned = _plan_variants(output_dir, profile_name, ext, range_str, variants, available, missing)
+    if not planned:
+        if variants and _all_variant_outputs_exist(output_dir, profile_name, ext, range_str, variants):
+            logger.info('Video already exists: %s', output)
+            return output
+        logger.error(
+            'No frames found in range %s → %s',
+            timestamps[0].strftime('%Y-%m-%d %H:%M'),
+            timestamps[-1].strftime('%Y-%m-%d %H:%M'),
+        )
+        raise SystemExit(1)
+
+    for variant, variant_output, background, opacity in planned:
+        _encode_variant(variant, variant_output, profile, background, opacity, available)
 
     logger.info('Video created: %s', output)
     return output

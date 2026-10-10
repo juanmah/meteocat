@@ -24,8 +24,7 @@ def _assemble_tiles(tiles: list[Path], columns: int) -> Image.Image:
     return canvas
 
 
-def _composite_radar(background_path: Path, radar_path: Path, output_path: Path, opacity: float) -> None:
-    background = Image.open(background_path).convert('RGBA')
+def _composite_radar_image(background: Image.Image, radar_path: Path, opacity: float) -> Image.Image:
     radar = Image.open(radar_path).convert('RGBA')
     radar = radar.resize(
         (int(background.width * _RESIZE_FACTOR), int(background.height * _RESIZE_FACTOR)),
@@ -35,7 +34,12 @@ def _composite_radar(background_path: Path, radar_path: Path, output_path: Path,
     alpha = alpha.point(lambda p: int(p * opacity))
     radar.putalpha(alpha)
     background.paste(radar, (_PASTE_OFFSET_X, _PASTE_OFFSET_Y), radar)
-    background.convert('RGB').save(output_path)
+    return background.convert('RGB')
+
+
+def _composite_radar(background_path: Path, radar_path: Path, output_path: Path, opacity: float) -> None:
+    background = Image.open(background_path).convert('RGBA')
+    _composite_radar_image(background, radar_path, opacity).save(output_path)
 
 
 def _apply_background_overlays(img: Image.Image) -> None:
