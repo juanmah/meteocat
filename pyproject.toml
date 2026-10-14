@@ -1,0 +1,121 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["meteocat*"]
+
+[project]
+name = "meteocat"
+version = "1.0.0"
+requires-python = ">=3.14"
+dependencies = [
+    "requests",
+    "typer",
+    "rich",
+    "pydantic>=2.13.5",
+    "pillow>=12.3.0",
+    "pygobject>=3.58.0",
+    "pyyaml>=6.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+]
+
+[project.scripts]
+meteocat = "meteocat.cli:app"
+
+[tool.bandit]
+exclude_dirs = [".venv", "stuff"]
+
+[tool.uv]
+package = true
+
+[tool.ruff]
+line-length = 120
+exclude = [".venv"]
+extend-include = ["*.ipynb"]
+
+[tool.ruff.lint]
+preview = true
+select = [
+    "ANN",
+    "ASYNC",
+    "S",
+    "BLE",
+    "FBT",
+    "B",
+    "A",
+    "COM",
+    "C4",
+    "DTZ",
+    "T10",
+    "EM",
+    "EXE",
+    "FIX",
+    "FA",
+    "INT",
+    "ISC",
+    "ICN",
+    "LOG",
+    "G",
+    "INP",
+    "PIE",
+    "T20",
+    "PYI",
+    "PT",
+    "Q",
+    "RSE",
+    "RET",
+    "SLF",
+    "SIM",
+    "SLOT",
+    "TID",
+    "TD",
+    "TC",
+    "ARG",
+    "PTH",
+    "FLY",
+    "I",
+    "C90",
+    "NPY",
+    "PD",
+    "N",
+    "PERF",
+    "E",
+    "W",
+    # "DOC",
+    # "D",
+    "F",
+    "PGH",
+    # "PL",
+    "UP",
+    "FURB",
+    "RUF",
+    "TRY",
+]
+ignore = [
+    "incorrect-blank-line-before-class",
+    "blank-line-before-class",
+    "multi-line-summary-first-line",
+    "bad-quotes-inline-string",
+    "avoidable-escaped-quote",
+    "missing-trailing-comma",
+    "typing-only-standard-library-import",
+    "commented-out-code",
+    "logging-f-string",
+]
+
+[tool.ruff.lint.flake8-boolean-trap]
+extend-allowed-calls = ["typer.Option"]
+
+[tool.ruff.lint.per-file-ignores]
+"*.ipynb" = ["print", "suspicious-non-cryptographic-random-usage"]
+"**/tests/*" = ["commented-out-code", "assert"]
+"scripts/*" = ["implicit-namespace-package"]
+
+[tool.ruff.format]
+quote-style = "single"

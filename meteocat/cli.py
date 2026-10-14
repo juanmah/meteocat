@@ -1,0 +1,173 @@
+import logging
+from enum import StrEnum
+
+import typer
+import yaml
+from typer.core import TyperGroup
+
+from meteocat import __version__
+from meteocat.config import settings
+from meteocat.logger import logger, setup
+
+
+class _OrderedTyperGroup(TyperGroup):
+    def list_commands(self, ctx: typer.Context) -> list[str]:
+        cmds = super().list_commands(ctx)
+        if 'scheduler' in cmds:
+            cmds.remove('scheduler')
+            idx = next((i for i, c in enumerate(cmds) if c == 'dependencies'), len(cmds))
+            cmds.insert(idx, 'scheduler')
+        return cmds
+
+
+class Scheduler(StrEnum):
+    AUTO = 'auto'
+    SYSTEMD = 'systemd'
+    CRON = 'cron'
+
+
+class DesktopEnvironment(StrEnum):
+    AUTO = 'auto'
+    GNOME = 'gnome'
+    CINNAMON = 'cinnamon'
+    MATE = 'mate'
+    KDE = 'kde'
+    XFCE = 'xfce'
+    LXQT = 'lxqt'
+    SWAY = 'sway'
+    HYPRLAND = 'hyprland'
+    I3 = 'i3'
+    NONE = 'none'
+
+
+app = typer.Typer(
+    help=f'Set the desktop wallpaper by fetching radar images from meteo.cat.\n\nVersion: {__version__}',
+    cls=_OrderedTyperGroup,
+)
+
+
+@app.callback(invoke_without_command=True)
+def main(
+    ctx: typer.Context,
+    *,
+    version: bool = typer.Option(
+        False,
+        '--version',
+        help='Show the version and exit.',
+        is_eager=True,
+    ),
+) -> None:
+    if version:
+        typer.echo(f'{__name__}, version {__version__}')
+        raise typer.Exit
+    level = getattr(logging, settings.log_level.upper(), logging.INFO)
+    setup(level=level)
+    if ctx.invoked_subcommand is None:
+        typer.echo(ctx.get_help())
+        raise typer.Exit
+
+
+@app.command()
+def background() -> None:
+    """Generate the 4K background map of Catalonia."""
+    from meteocat.wallpaper import generate_background
+
+    generate_background()
+
+
+@app.command()
+def wallpaper() -> None:
+    """Generate a wallpaper with the latest radar map."""
+    from meteocat.wallpaper import generate_wallpaper
+
+    generate_wallpaper()
+
+
+_DE_SET_ARGUMENT = typer.Argument(DesktopEnvironment.AUTO, help='Desktop environment to set.')
+
+
+@app.command()
+def desktop_environment(
+    desktop_environment: DesktopEnvironment = _DE_SET_ARGUMENT,
+) -> None:
+    """Set the desktop environment for the wallpaper."""
+    settings.desktop_environment = desktop_environment
+    from meteocat.config import save_config
+
+    save_config('desktop_environment')
+    typer.echo(f'Desktop environment set to: {desktop_environment}')
+
+
+scheduler_app = typer.Typer(help='Manage the scheduler.')
+
+_SCHEDULER_ARGUMENT = typer.Argument(Scheduler.AUTO, help='Scheduler to use.')
+
+
+@scheduler_app.callback(invoke_without_command=True)
+def _scheduler_main(ctx: typer.Context) -> None:
+    if ctx.invoked_subcommand is None:
+        typer.echo(ctx.get_help())
+        raise typer.Exit
+
+
+@scheduler_app.command('install')
+def _install_scheduler(
+    scheduler: Scheduler = _SCHEDULER_ARGUMENT,
+) -> None:
+    """Install the scheduler (systemd or cron)."""
+    from meteocat.scheduler import install as _install
+
+    settings.scheduler = scheduler
+    from meteocat.config import save_config as _save
+
+    _save('scheduler')
+    _install()
+
+
+@scheduler_app.command('uninstall')
+def _uninstall_scheduler() -> None:
+    """Uninstall the scheduler"""
+    from meteocat.scheduler import uninstall as _uninstall
+
+    _uninstall()
+
+
+@scheduler_app.command('status')
+def _status_scheduler() -> None:
+    """Show the scheduler status."""
+    from meteocat.scheduler import status as _status
+
+    _status()
+
+
+@app.command()
+def dependencies() -> None:
+    """Check required system packages."""
+    from meteocat.deps import check_dependencies
+
+    check_dependencies(verbose=True)
+
+
+@app.command(hidden=True)
+def save_config() -> None:
+    """Save config to user file."""
+    from meteocat.config import save_config as _save
+
+    _save()
+    typer.echo('Config saved.')
+
+
+@app.command(hidden=True)
+def set_config(
+    field: str = typer.Argument(..., help='Config field name.'),
+    value: str = typer.Argument(..., help='Config field value.'),
+) -> None:
+    """Set a config field and save."""
+    from meteocat.config import save_config as _save
+
+    setattr(settings, field, yaml.safe_load(value))
+    _save(field)
+    logger.info(f'[bold]{field}[/bold] set to [bold]{getattr(settings, field)}[/bold]')
+
+
+app.add_typer(scheduler_app, name='scheduler')
