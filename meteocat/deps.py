@@ -1,3 +1,4 @@
+import sys
 from pathlib import Path
 from shutil import which
 
@@ -18,7 +19,13 @@ _BINARY_TO_PACKAGE: dict[str, dict[str, str]] = {
 _DE_GSETTINGS_DEPS = {'gnome', 'cinnamon', 'mate'}
 
 
+def _is_windows() -> bool:
+    return sys.platform == 'win32'
+
+
 def _detect_distro() -> str:
+    if _is_windows():
+        return 'windows'
     try:
         id_like = Path('/etc/os-release').read_text()
         for line in id_like.splitlines():
@@ -55,6 +62,25 @@ def _check_binary(
     return False
 
 
+def _check_pygobject(*, verbose: bool = False) -> bool:
+    try:
+        import gi
+
+        gi.require_version('Gio', '2.0')
+        from gi.repository import Gio  # ruff: ignore[unused-import]
+    except ImportError:
+        msg = (
+            '[bold]pygobject[/bold] not found. '
+            'Install [bold]pygobject[/bold] (pip install pygobject) or system package.'
+        )
+        logger.error(msg)
+        return False
+    else:
+        if verbose:
+            logger.info('[green]pygobject (gi.repository.Gio)[/green] available.')
+        return True
+
+
 _DE_TOOL_MAP: dict[str, str] = {
     'gnome': 'gsettings',
     'cinnamon': 'gsettings',
@@ -65,7 +91,35 @@ _DE_TOOL_MAP: dict[str, str] = {
     'sway': 'swaymsg',
     'hyprland': 'hyprctl',
     'i3': 'feh',
+    'windows': '',  # Uses ctypes (stdlib), no external binary needed
 }
+
+
+def _check_de_dependencies(de: str, *, verbose: bool = False) -> None:
+    if _is_windows():
+        if verbose:
+            logger.info('[green]ctypes[/green] available (stdlib).')
+    elif de and de in _DE_GSETTINGS_DEPS:
+        _check_binary('gsettings', fatal=True, verbose=verbose, reason=f'required for DE: {de}')
+        _check_pygobject(verbose=verbose)
+    else:
+        de_tool = _DE_TOOL_MAP.get(de)
+        if de_tool:
+            found = _check_binary(de_tool, verbose=verbose, reason=f'required for DE: {de}')
+            if not found and verbose:
+                logger.warning(f'{de_tool} not found for DE "{de}". Some features may not work.')
+
+
+def _check_scheduler_dependencies(scheduler: str, *, verbose: bool = False) -> None:
+    if scheduler == 'cron':
+        _check_binary('crontab', fatal=True, verbose=verbose, reason=f'required for scheduler: {scheduler}')
+    elif scheduler == 'systemd':
+        _check_binary('systemctl', fatal=True, verbose=verbose, reason=f'required for scheduler: {scheduler}')
+    elif scheduler == 'windows':
+        if _is_windows():
+            _check_binary('schtasks.exe', fatal=True, verbose=verbose, reason=f'required for scheduler: {scheduler}')
+        else:
+            logger.warning('Windows scheduler selected but not on Windows platform.')
 
 
 def check_dependencies(*, verbose: bool = False) -> None:
@@ -79,21 +133,8 @@ def check_dependencies(*, verbose: bool = False) -> None:
         logger.info(f'Desktop environment: [bold]{de_resolution.de}[/bold] ({de_resolution.source})')
         logger.info(f'Scheduler: [bold]{scheduler_resolution.scheduler}[/bold] ({scheduler_resolution.source})')
 
-    de = de_resolution.de
-    de_tool = _DE_TOOL_MAP.get(de)
-
-    if de and de in _DE_GSETTINGS_DEPS:
-        _check_binary('gsettings', fatal=True, verbose=verbose, reason=f'required for DE: {de}')
-    elif de_tool:
-        found = _check_binary(de_tool, verbose=verbose, reason=f'required for DE: {de}')
-        if not found and verbose:
-            logger.warning(f'{de_tool} not found for DE "{de}". Some features may not work.')
-
-    scheduler = scheduler_resolution.scheduler
-    if scheduler == 'cron':
-        _check_binary('crontab', fatal=True, verbose=verbose, reason=f'required for scheduler: {scheduler}')
-    elif scheduler == 'systemd':
-        _check_binary('systemctl', fatal=True, verbose=verbose, reason=f'required for scheduler: {scheduler}')
+    _check_de_dependencies(de_resolution.de, verbose=verbose)
+    _check_scheduler_dependencies(scheduler_resolution.scheduler, verbose=verbose)
 
     if verbose:
         logger.info('All dependencies checked.')

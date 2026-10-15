@@ -1,4 +1,5 @@
 import os
+import sys
 import tempfile
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
@@ -102,6 +103,8 @@ def _match_env_var(env_name: str, token_map: dict[str, str]) -> str | None:
 
 
 def _detect_de() -> DeResolution:
+    if sys.platform == 'win32':
+        return DeResolution('windows', 'auto-detected (Windows platform)')
     for env_name, token_map in (
         ('XDG_CURRENT_DESKTOP', _XDG_TOKEN_MAP),
         ('XDG_SESSION_DESKTOP', _XDG_SESSION_TOKEN_MAP),
@@ -117,10 +120,14 @@ def _detect_de() -> DeResolution:
 
 
 def _set_gnome(path: Path, *, dark: bool = False) -> None:
-    import gi
+    try:
+        import gi
 
-    gi.require_version('Gio', '2.0')
-    from gi.repository import Gio
+        gi.require_version('Gio', '2.0')
+        from gi.repository import Gio
+    except ImportError:
+        msg = 'pygobject (gi.repository.Gio) is required for GNOME desktop'
+        raise RuntimeError(msg) from None
 
     key = 'picture-uri-dark' if dark else 'picture-uri'
     gsettings = Gio.Settings.new('org.gnome.desktop.background')
@@ -128,10 +135,14 @@ def _set_gnome(path: Path, *, dark: bool = False) -> None:
 
 
 def _set_cinnamon(path: Path, *, dark: bool = False) -> None:
-    import gi
+    try:
+        import gi
 
-    gi.require_version('Gio', '2.0')
-    from gi.repository import Gio
+        gi.require_version('Gio', '2.0')
+        from gi.repository import Gio
+    except ImportError:
+        msg = 'pygobject (gi.repository.Gio) is required for Cinnamon desktop'
+        raise RuntimeError(msg) from None
 
     key = 'picture-uri-dark' if dark else 'picture-uri'
     gsettings = Gio.Settings.new('org.cinnamon.desktop.background')
@@ -139,10 +150,14 @@ def _set_cinnamon(path: Path, *, dark: bool = False) -> None:
 
 
 def _set_mate(path: Path, *, _dark: bool = False) -> None:
-    import gi
+    try:
+        import gi
 
-    gi.require_version('Gio', '2.0')
-    from gi.repository import Gio
+        gi.require_version('Gio', '2.0')
+        from gi.repository import Gio
+    except ImportError:
+        msg = 'pygobject (gi.repository.Gio) is required for MATE desktop'
+        raise RuntimeError(msg) from None
 
     gsettings = Gio.Settings.new('org.mate.background')
     gsettings.set_string('picture-filename', f'file://{path}')
@@ -218,6 +233,27 @@ def _set_i3(path: Path, *, _dark: bool = False) -> None:
     )
 
 
+def _set_windows(path: Path, *, dark: bool = False) -> None:
+    import ctypes
+
+    spi_setdeskwallpaper = 0x0014
+    spif_updateinifile = 0x01
+    spif_sendchange = 0x02
+
+    if dark:
+        logger.debug('Windows does not support separate dark mode wallpaper; using light variant.')
+        return
+
+    result = ctypes.windll.user32.SystemParametersInfoW(
+        spi_setdeskwallpaper,
+        0,
+        str(path),
+        spif_updateinifile | spif_sendchange,
+    )
+    if not result:
+        raise ctypes.WinError(ctypes.get_last_error())
+
+
 _SETTERS: dict[str, callable] = {
     'gnome': _set_gnome,
     'cinnamon': _set_cinnamon,
@@ -228,6 +264,7 @@ _SETTERS: dict[str, callable] = {
     'sway': _set_sway,
     'hyprland': _set_hyprland,
     'i3': _set_i3,
+    'windows': _set_windows,
 }
 
 

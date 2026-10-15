@@ -1,4 +1,7 @@
+import os
+import sys
 from pathlib import Path
+from shutil import which
 
 import yaml
 from pydantic import BaseModel
@@ -6,8 +9,25 @@ from pydantic import BaseModel
 
 class ConfigPaths(BaseModel):
     package: Path = Path(__file__).parent / 'config.yaml'
-    system: Path = Path('/etc/meteocat/config.yaml')
-    user: Path = Path.home() / '.local' / 'share' / 'meteocat' / 'config.yaml'
+    system: Path = Path('/etc/meteocat/config.yaml') if sys.platform != 'win32' else Path()
+    user: Path = (
+        Path(os.environ.get('LOCALAPPDATA', Path.home())) / 'meteocat' / 'config.yaml'
+        if sys.platform == 'win32'
+        else Path.home() / '.local' / 'share' / 'meteocat' / 'config.yaml'
+    )
+
+
+def _default_uv_bin() -> str:
+    path = which('uv')
+    if path is None:
+        return 'uv'
+    return path
+
+
+def _default_service_exec() -> str:
+    project_root = Path(__file__).parent.parent
+    uv_bin = _default_uv_bin()
+    return f'{uv_bin} run --project {project_root} meteocat'
 
 
 class WallpaperSettings(BaseModel):
@@ -15,8 +35,14 @@ class WallpaperSettings(BaseModel):
 
     service_name: str = 'meteocat_wallpaper_generator'
     systemd_user_dir: Path = Path.home() / '.config' / 'systemd' / 'user'
-    working_directory: Path = Path.home() / '.local' / 'share' / 'meteocat'
-    service_exec: str = f'/usr/bin/uv run --project {Path(__file__).parent.parent} meteocat'
+    working_directory: Path = (
+        Path(os.environ.get('LOCALAPPDATA', Path.home())) / 'meteocat'
+        if sys.platform == 'win32'
+        else Path.home() / '.local' / 'share' / 'meteocat'
+    )
+    project_root: Path = Path(__file__).parent.parent
+    uv_bin: str = _default_uv_bin()
+    service_exec: str = _default_service_exec()
 
     scheduler: str = 'auto'
     desktop_environment: str = 'auto'

@@ -173,16 +173,20 @@ wheels = [
 
 [[package]]
 name = "meteocat"
-version = "1.0.0"
+version = "1.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "pillow" },
     { name = "pydantic" },
-    { name = "pygobject" },
     { name = "pyyaml" },
     { name = "requests" },
     { name = "rich" },
     { name = "typer" },
+]
+
+[package.optional-dependencies]
+gsettings = [
+    { name = "pygobject" },
 ]
 
 [package.dev-dependencies]
@@ -194,12 +198,13 @@ dev = [
 requires-dist = [
     { name = "pillow", specifier = ">=12.3.0" },
     { name = "pydantic", specifier = ">=2.13.5" },
-    { name = "pygobject", specifier = ">=3.58.0" },
+    { name = "pygobject", marker = "extra == 'gsettings'", specifier = ">=3.58.0" },
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "requests" },
     { name = "rich" },
     { name = "typer" },
 ]
+provides-extras = ["gsettings"]
 
 [package.metadata.requires-dev]
 dev = [{ name = "pytest", specifier = ">=9.1.1" }]

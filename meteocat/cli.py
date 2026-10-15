@@ -24,6 +24,7 @@ class Scheduler(StrEnum):
     AUTO = 'auto'
     SYSTEMD = 'systemd'
     CRON = 'cron'
+    WINDOWS = 'windows'
 
 
 class DesktopEnvironment(StrEnum):
@@ -37,6 +38,7 @@ class DesktopEnvironment(StrEnum):
     SWAY = 'sway'
     HYPRLAND = 'hyprland'
     I3 = 'i3'
+    WINDOWS = 'windows'
     NONE = 'none'
 
 
