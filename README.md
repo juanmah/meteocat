@@ -23,9 +23,14 @@ Generates a desktop wallpaper by fetching radar images from meteo.cat and overla
 > git clone https://github.com/juanmah/meteocat.git
 > cd meteocat
 > uv sync
+> uv run python scripts/post_install.py
 ```
 
-This creates a virtual environment in `.venv` and installs dependencies from `uv.lock`. Run commands with `uv run meteocat <command>`.
+This creates a virtual environment in `.venv` and installs dependencies from `uv.lock`.
+
+`uv run python scripts/post_install.py` detects your desktop environment and installs the `gsettings` extra (`pygobject`) automatically when running GNOME, Cinnamon, or MATE.
+
+Run commands with `uv run meteocat <command>`.
 
 ### Option 2: Arch Linux AUR
 

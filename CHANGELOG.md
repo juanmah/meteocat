@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.1.1] - 2026-10-16
+
+### Added
+- `scripts/post_install.py`: post-install script that detects the desktop environment and installs the `gsettings` extra (`pygobject`) automatically for GNOME, Cinnamon, or MATE
+- README installation instructions updated to run `uv run python scripts/post_install.py` after `uv sync`
+
 ## [1.1.0] - 2026-10-15
 
 ### Added
