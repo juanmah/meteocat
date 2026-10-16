@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.1.2] - 2026-10-16
+
+### Added
+- `scripts/bump.py`: version bump script (patch|minor|major)
+- Makefile: added `bump` and `tag` release targets
+
 ## [1.1.1] - 2026-10-16
 
 ### Added
