@@ -3,7 +3,16 @@ import logging
 import pytest
 
 from meteocat.config import settings
-from meteocat.deps import check_dependencies
+from meteocat.deps import (
+    _check_binary,
+    _check_de_dependencies,
+    _check_pygobject,
+    _check_scheduler_dependencies,
+    _detect_distro,
+    _get_package_name,
+    _is_windows,
+    check_dependencies,
+)
 from meteocat.scheduler import SchedulerResolution, _resolve_scheduler_detailed
 from meteocat.wallpaper import DeResolution, _detect_de, _resolve_de_detailed
 
@@ -92,3 +101,150 @@ def test_check_dependencies_non_gsettings_tool_warning(
         check_dependencies(verbose=True)
     assert 'qdbus not found for DE "kde". Some features may not work.' in caplog.text
     assert '[bold]crontab[/bold] not found (required for scheduler: cron). Install' in caplog.text
+
+
+def test_is_windows(monkeypatch: pytest.MonkeyPatch) -> None:
+    import sys
+
+    monkeypatch.setattr(sys, 'platform', 'win32')
+    assert _is_windows() is True
+    monkeypatch.setattr(sys, 'platform', 'linux')
+    assert _is_windows() is False
+
+
+def test_detect_distro_reads_os_release(monkeypatch: pytest.MonkeyPatch) -> None:
+    import sys
+
+    monkeypatch.setattr(sys, 'platform', 'linux')
+    monkeypatch.setattr('meteocat.deps.Path.read_text', lambda _self: 'ID=ubuntu\nID_LIKE=debian\n')
+    assert _detect_distro() == 'ubuntu'
+
+
+def test_detect_distro_os_error_falls_back_to_arch(monkeypatch: pytest.MonkeyPatch) -> None:
+    import sys
+
+    monkeypatch.setattr(sys, 'platform', 'linux')
+    monkeypatch.setattr('meteocat.deps.Path.read_text', lambda _self: (_ for _ in ()).throw(OSError()))
+    assert _detect_distro() == 'arch'
+
+
+def test_detect_distro_windows(monkeypatch: pytest.MonkeyPatch) -> None:
+    import sys
+
+    monkeypatch.setattr(sys, 'platform', 'win32')
+    assert _detect_distro() == 'windows'
+
+
+def test_get_package_name_distro_mapping(monkeypatch: pytest.MonkeyPatch) -> None:
+    import sys
+
+    monkeypatch.setattr(sys, 'platform', 'linux')
+    monkeypatch.setattr('meteocat.deps.Path.read_text', lambda _self: 'ID=debian\n')
+    assert _get_package_name('gsettings') == 'libglib2.0-bin'
+
+
+def test_get_package_name_unknown_distro_falls_back_to_arch(monkeypatch: pytest.MonkeyPatch) -> None:
+    import sys
+
+    monkeypatch.setattr(sys, 'platform', 'linux')
+    monkeypatch.setattr('meteocat.deps.Path.read_text', lambda _self: 'ID=distroless\n')
+    assert _get_package_name('gsettings') == 'glib2'
+
+
+def test_get_package_name_no_mapping_returns_binary(monkeypatch: pytest.MonkeyPatch) -> None:
+    import sys
+
+    monkeypatch.setattr(sys, 'platform', 'linux')
+    monkeypatch.setattr('meteocat.deps.Path.read_text', lambda _self: 'ID=distroless\n')
+    assert _get_package_name('nonexistent-binary') == 'nonexistent-binary'
+
+
+def test_check_binary_found(monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture) -> None:
+    monkeypatch.setattr('meteocat.deps.which', lambda binary: f'/usr/bin/{binary}')
+    with caplog.at_level(logging.INFO, logger='meteocat'):
+        assert _check_binary('gsettings', verbose=True) is True
+    assert '[green]gsettings[/green] found' in caplog.text
+
+
+def test_check_binary_not_found_non_fatal(monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture) -> None:
+    monkeypatch.setattr('meteocat.deps.which', lambda _binary: None)
+    with caplog.at_level(logging.ERROR, logger='meteocat'):
+        assert _check_binary('gsettings', verbose=True) is False
+    assert '[bold]gsettings[/bold] not found' in caplog.text
+
+
+def test_check_binary_fatal(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr('meteocat.deps.which', lambda _binary: None)
+    with pytest.raises(SystemExit):
+        _check_binary('gsettings', fatal=True, verbose=True)
+
+
+def test_check_pygobject_import_error(monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture) -> None:
+    import sys
+
+    class _FakeGi:
+        def require_version(self, *_args: object, **_kwargs: object) -> None:
+            msg = 'no gi'
+            raise ImportError(msg)
+
+    monkeypatch.setitem(sys.modules, 'gi', _FakeGi())
+    monkeypatch.setitem(sys.modules, 'gi.repository', None)
+    with caplog.at_level(logging.ERROR, logger='meteocat'):
+        assert _check_pygobject() is False
+    assert 'pygobject' in caplog.text
+
+
+def test_check_de_dependencies_win32(monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture) -> None:
+    import sys
+
+    monkeypatch.setattr(sys, 'platform', 'win32')
+    with caplog.at_level(logging.INFO, logger='meteocat'):
+        _check_de_dependencies('windows', verbose=True)
+    assert 'ctypes' in caplog.text
+
+
+def test_check_de_dependencies_gnome(monkeypatch: pytest.MonkeyPatch) -> None:
+    import sys
+
+    monkeypatch.setattr(sys, 'platform', 'linux')
+    monkeypatch.setattr('meteocat.deps.which', lambda binary: f'/usr/bin/{binary}')
+    monkeypatch.setattr('meteocat.deps._check_pygobject', lambda **_kwargs: True)
+    _check_de_dependencies('gnome', verbose=True)
+
+
+def test_check_de_dependencies_kde_tool_map(monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture) -> None:
+    import sys
+
+    monkeypatch.setattr(sys, 'platform', 'linux')
+    monkeypatch.setattr('meteocat.deps.which', lambda _binary: None)
+    with caplog.at_level(logging.WARNING, logger='meteocat'):
+        _check_de_dependencies('kde', verbose=True)
+    assert 'qdbus not found for DE "kde". Some features may not work.' in caplog.text
+
+
+def test_check_scheduler_dependencies_cron(monkeypatch: pytest.MonkeyPatch) -> None:
+    import sys
+
+    monkeypatch.setattr(sys, 'platform', 'linux')
+    monkeypatch.setattr('meteocat.deps.which', lambda binary: f'/usr/bin/{binary}')
+    _check_scheduler_dependencies('cron', verbose=True)
+
+
+def test_check_scheduler_dependencies_systemd(monkeypatch: pytest.MonkeyPatch) -> None:
+    import sys
+
+    monkeypatch.setattr(sys, 'platform', 'linux')
+    monkeypatch.setattr('meteocat.deps.which', lambda binary: f'/usr/bin/{binary}')
+    _check_scheduler_dependencies('systemd', verbose=True)
+
+
+def test_check_scheduler_dependencies_windows_off_platform_warning(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    import sys
+
+    monkeypatch.setattr(sys, 'platform', 'linux')
+    monkeypatch.setattr('meteocat.deps.which', lambda _binary: None)
+    with caplog.at_level(logging.WARNING, logger='meteocat'):
+        _check_scheduler_dependencies('windows', verbose=True)
+    assert 'Windows scheduler selected but not on Windows platform.' in caplog.text
